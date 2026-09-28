@@ -7,19 +7,18 @@ con tus emociones resaltadas y tus registros ordenados por categoría.
 
 Funciona en **Vercel** (siempre disponible, desde cualquier dispositivo) o **en tu computadora**.
 
-## Subir a Vercel
+## En línea: <https://mis-emociones-one.vercel.app>
 
-Hace falta Node.js (para `npx`) y una cuenta de Vercel (gratis).
+El proyecto de Vercel está conectado a este repositorio: **cada `git push` a `main` publica los
+cambios solo**, en menos de un minuto. Un push a otra rama crea una vista previa con su propia
+dirección (el bot sigue conectado a la versión principal).
 
-1. **Despliega.** Desde esta carpeta:
-   ```bash
-   npx vercel --prod
-   ```
-   La primera vez te pide iniciar sesión y confirmar el proyecto: acepta las opciones por defecto.
-   Al final te da la dirección, algo como `https://mis-emociones.vercel.app`.
-2. **Crea la base de datos.** En [vercel.com](https://vercel.com), abre el proyecto →
+### Configurarlo (una sola vez)
+
+1. **Crea la base de datos.** En [vercel.com](https://vercel.com), abre el proyecto →
    **Storage** → **Create Database** → **Neon** (plan gratis) → conéctala al proyecto.
-   Después vuelve a desplegar (`npx vercel --prod`, o *Deployments → ⋯ → Redeploy*).
+2. **Vuelve a publicar** para que tome la configuración nueva: *Deployments → ⋯ → Redeploy*
+   (o haz cualquier push). Hace falta cada vez que cambias la base de datos o las variables.
 3. **Abre la dirección del proyecto.** Verás una lista con lo que está listo y lo que falta.
 4. **Cuando tengas el token del bot** (en Telegram: [@BotFather](https://t.me/BotFather) → `/newbot`),
    agrégalo en *Settings → Environment Variables*:
@@ -30,7 +29,7 @@ Hace falta Node.js (para `npx`) y una cuenta de Vercel (gratis).
    | `ZONA_HORARIA` | recomendado, p. ej. `America/Argentina/Buenos_Aires`, `America/Mexico_City`, `Europe/Madrid` |
    | `TELEGRAM_USUARIOS` | opcional: tu ID de Telegram (te lo dice [@userinfobot](https://t.me/userinfobot)) |
 
-   Vuelve a desplegar y **abre la página una vez**: eso conecta el bot con Telegram.
+   Vuelve a publicar (paso 2) y **abre la página una vez**: eso conecta el bot con Telegram.
 5. **Escríbele a tu bot** y envíale `/panel`: te responde con un enlace para entrar al panel.
 
 ### Seguridad
