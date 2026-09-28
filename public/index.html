@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mis emociones</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-10 -10 20 20'%3E%3Cpath d='M0 0L0-9A9 9 0 0 1 7.8-4.5Z' fill='%23EB5547'/%3E%3Cpath d='M0 0L7.8-4.5A9 9 0 0 1 7.8 4.5Z' fill='%23A95BD0'/%3E%3Cpath d='M0 0L7.8 4.5A9 9 0 0 1 0 9Z' fill='%23EB4783'/%3E%3Cpath d='M0 0L0 9A9 9 0 0 1-7.8 4.5Z' fill='%23F8B928'/%3E%3Cpath d='M0 0L-7.8 4.5A9 9 0 0 1-7.8-4.5Z' fill='%234CC27A'/%3E%3Cpath d='M0 0L-7.8-4.5A9 9 0 0 1 0-9Z' fill='%233D9BE0'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/estatico/estilos.css">
+</head>
+<body>
+  <header class="cabecera">
+    <div>
+      <h1>Mis emociones</h1>
+      <p class="subtitulo">La rueda de los sentimientos · Gloria Willcox, 1982</p>
+    </div>
+    <div class="acciones">
+      <div class="segmentado" id="periodos" role="group" aria-label="Período" hidden>
+        <button type="button" data-periodo="hoy">Hoy</button>
+        <button type="button" data-periodo="7">7 días</button>
+        <button type="button" data-periodo="30">30 días</button>
+        <button type="button" data-periodo="todo">Todo</button>
+      </div>
+      <a class="salir" id="salir" href="/salir" hidden>Salir</a>
+    </div>
+  </header>
+
+  <section class="acceso" id="acceso" hidden>
+    <div class="tarjeta">
+      <h2>Entra a tu panel</h2>
+      <p>Envía <code>/panel</code> a tu bot de Telegram y toca el enlace que te responde.
+         El enlace vence en 10 minutos y deja la sesión abierta en este navegador por 30 días.</p>
+      <ul class="pasos" id="pasos"></ul>
+    </div>
+  </section>
+
+  <main class="contenido" id="contenido" hidden>
+    <section class="tarjeta panel-rueda" aria-labelledby="titulo-rueda">
+      <div class="fila-titulo">
+        <h2 id="titulo-rueda">Tu rueda</h2>
+        <label class="interruptor">
+          <input type="checkbox" id="resaltar" checked>
+          <span class="pista-interruptor" aria-hidden="true"></span>
+          Resaltar lo que sentí
+        </label>
+      </div>
+      <svg id="rueda" class="rueda resaltar" viewBox="-345 -345 690 690" role="img"
+           aria-label="Rueda de los sentimientos con tus emociones resaltadas"></svg>
+      <p class="nota">Toca una emoción o una categoría para ver sus registros.</p>
+    </section>
+
+    <aside class="tarjeta panel-resumen" aria-labelledby="titulo-resumen">
+      <h2 id="titulo-resumen">Resumen</h2>
+      <div class="totales" id="totales"></div>
+      <div class="barras" id="barras"></div>
+      <h3>Lo que más sentiste</h3>
+      <ol class="frecuentes" id="frecuentes"></ol>
+    </aside>
+
+    <section class="registros" aria-labelledby="titulo-registros">
+      <div class="fila-titulo">
+        <h2 id="titulo-registros">Tus registros</h2>
+        <div class="filtro" id="filtro" hidden>
+          <span id="filtro-texto"></span>
+          <button type="button" id="quitar-filtro" aria-label="Quitar filtro">✕</button>
+        </div>
+        <div class="segmentado" id="vistas" role="group" aria-label="Vista">
+          <button type="button" data-vista="categorias">Por categoría</button>
+          <button type="button" data-vista="diario">Diario</button>
+        </div>
+      </div>
+      <div class="tablero" id="tablero"></div>
+      <div class="diario" id="diario" hidden></div>
+      <div class="vacio" id="vacio" hidden>
+        <p><strong>Todavía no hay registros en este período.</strong></p>
+        <p>Escríbele a tu bot de Telegram cómo te sientes y qué lo causó, por ejemplo:</p>
+        <p><code>Frustrado, ansioso: mi jefe cambió la fecha de entrega</code></p>
+      </div>
+    </section>
+  </main>
+
+  <div class="globo" id="globo" role="tooltip" hidden></div>
+  <script type="module" src="/estatico/app.js"></script>
+</body>
+</html>

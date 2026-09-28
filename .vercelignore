@@ -1,0 +1,5 @@
+.env*
+datos/
+*.db
+tests/
+__pycache__/

@@ -1,0 +1,6 @@
+.env
+datos/
+__pycache__/
+.vercel
+.env*
+!.env.example
