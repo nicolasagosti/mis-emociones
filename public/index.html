@@ -13,6 +13,7 @@
     <symbol id="i-diario" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></symbol>
     <symbol id="i-personas" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
     <symbol id="i-compartir" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+    <symbol id="i-palabras" viewBox="0 0 24 24"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4Z"/><circle cx="7.5" cy="7.5" r="1"/></symbol>
     <symbol id="i-telegram" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
     <symbol id="i-salir" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
@@ -57,6 +58,7 @@
           <p class="titulo-grupo"><svg aria-hidden="true"><use href="#i-personas"/></svg>Compartidos conmigo</p>
           <div class="subnav" id="nav-compartidos"></div>
         </div>
+        <a href="#/palabras" data-ruta="palabras" id="nav-palabras" hidden><svg aria-hidden="true"><use href="#i-palabras"/></svg>Mis palabras</a>
         <a href="#/compartir" data-ruta="compartir" id="nav-compartir" hidden><svg aria-hidden="true"><use href="#i-compartir"/></svg>Compartir mi diario</a>
         <a href="#/telegram" data-ruta="telegram" id="nav-telegram" hidden><svg aria-hidden="true"><use href="#i-telegram"/></svg>Telegram<span class="insignia" id="insignia-telegram" hidden>Vincular</span></a>
       </nav>
@@ -137,6 +139,37 @@
             </div>
           </section>
         </main>
+      </section>
+
+      <section class="vista" id="vista-palabras" hidden>
+        <header class="cabecera">
+          <div>
+            <h1>Mis palabras</h1>
+            <p class="subtitulo">Cómo entiende el bot tus palabras. Lo que cambies aquí vale también en Telegram.</p>
+          </div>
+        </header>
+        <div class="paginas">
+          <section class="tarjeta" aria-labelledby="titulo-ensenar">
+            <h2 id="titulo-ensenar">Enseñar o cambiar una palabra</h2>
+            <form class="form-palabra" id="form-palabra">
+              <label for="palabra-nueva">Palabra</label>
+              <input id="palabra-nueva" required maxlength="40" autocomplete="off" placeholder="Por ejemplo: agotado">
+              <label for="emocion-palabra">Va en</label>
+              <select id="emocion-palabra" required></select>
+              <button type="submit" class="boton">Guardar</button>
+            </form>
+            <p class="aviso-acceso" id="aviso-palabras" role="status" hidden></p>
+            <p class="explicacion nota-palabras">Vale también en femenino y en plural: si le enseñas «agotado», entiende
+              «agotada» y «agotados». Lo que definas reemplaza a los sinónimos que ya trae el bot (por ejemplo, puedes
+              hacer que «rabia» sea Molesto en vez de Furioso).</p>
+          </section>
+          <section class="tarjeta" aria-labelledby="titulo-lista-palabras">
+            <h2 id="titulo-lista-palabras">Las que ya aprendió</h2>
+            <ul class="lista-palabras" id="lista-palabras"></ul>
+            <p class="explicacion nota-palabras">En Telegram: <code>/palabras</code> para verlas,
+              <code>/palabra agotado</code> para cambiar una y <code>/olvidar agotado</code> para quitarla.</p>
+          </section>
+        </div>
       </section>
 
       <section class="vista" id="vista-compartir" hidden>

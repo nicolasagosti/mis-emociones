@@ -86,6 +86,18 @@ class TestRueda(unittest.TestCase):
         self.assertEqual((r.emociones, r.desconocidas), ([], []))
         self.assertEqual(r.causa, "Hoy: me peleé con mi hermano")
 
+    def test_palabra_valida(self):
+        self.assertEqual(rueda.palabra_valida("  Agotada "), "agotada")
+        self.assertEqual(rueda.palabra_valida("Sin Ganas"), "sin ganas")
+        for mala in ("", "123", "!!!", "una dos tres cuatro", "x" * 41):
+            self.assertIsNone(rueda.palabra_valida(mala), mala)
+
+    def test_significado(self):
+        self.assertEqual(rueda.significado("rabia"), ("enojo/furioso",))
+        self.assertEqual(rueda.significado("rabia", {"rabia": "enojo/molesto"}), ("enojo/molesto",))
+        self.assertEqual(rueda.significado("agradecido"), ("calma/agradecido", "fuerza/agradecido"))
+        self.assertEqual(rueda.significado("zapato"), ())
+
     def test_saludos(self):
         self.assertTrue(rueda.es_saludo("Hola!"))
         self.assertFalse(rueda.es_saludo("hola, estoy triste"))

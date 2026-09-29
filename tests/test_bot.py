@@ -208,6 +208,36 @@ class TestBot(Ayudantes, unittest.TestCase):
             self.tocar(datos)
         self.assertEqual(len(self.registros()[0]["emociones"]), 1)
 
+    def test_ensenar_cambiar_y_olvidar_palabras(self):
+        self.escribir("/palabras")
+        self.assertIn("Todavía no me enseñaste palabras", self.api.enviados[-1][0])
+        # «rabia» viene incluida como Furioso; la cambio a Molesto.
+        self.escribir("/palabra Rabia")
+        texto, teclado = self.api.enviados[-1]
+        self.assertIn("Hoy la entiendo como", texto)
+        self.assertIn("p:0:c:enojo", botones(teclado))
+        self.tocar("p:0:c:enojo")
+        self.assertIn("p:0:e:enojo/molesto", botones(self.api.teclados[-1]))
+        self.tocar("p:0:e:enojo/molesto")
+        self.assertIn("Desde ahora la entiendo así", self.api.ediciones[-1][0])
+        self.escribir("rabia: el tráfico")
+        self.assertEqual(self.registros()[0]["emociones"][0]["emocion"], "enojo/molesto")
+        self.escribir("/palabras")
+        self.assertIn("rabia →", self.api.enviados[-1][0])
+        # Al olvidarla, vuelve a lo que trae el bot.
+        self.escribir("/olvidar rabia")
+        self.assertIn("olvidé «rabia»", self.api.enviados[-1][0])
+        self.escribir("rabia: otra vez el tráfico")
+        self.assertEqual(self.registros()[0]["emociones"][0]["emocion"], "enojo/furioso")
+
+    def test_palabras_mal_escritas(self):
+        self.escribir("/palabra")
+        self.assertIn("/palabra agotado", self.api.enviados[-1][0])
+        self.escribir("/olvidar agotado")
+        self.assertIn("no estaba entre tus palabras", self.api.enviados[-1][0])
+        self.tocar("p:0:e:tristeza")  # botón sin haber usado /palabra antes
+        self.assertIn("/palabra", self.api.avisos[-1])
+
     def test_resumenes(self):
         self.escribir("frustrado: tráfico")
         self.escribir("frustrado, ansioso: examen")

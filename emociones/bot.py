@@ -24,6 +24,7 @@ COMANDOS = [
     ("semana", "Resumen de los últimos 7 días"),
     ("panel", "Abrir tu panel con la rueda"),
     ("rueda", "Todas las emociones de la rueda"),
+    ("palabras", "Ver y cambiar las palabras que me enseñaste"),
     ("deshacer", "Borrar el último registro"),
     ("ayuda", "Cómo usar el bot"),
 ]
@@ -345,7 +346,7 @@ class Bot:
             return
         valor = partes[3] if len(partes) > 3 else ""
         invalido = (
-            tipo not in ("f", "r")
+            tipo not in ("f", "r", "p")
             or (accion == "c" and valor not in rueda.CATEGORIA)
             or (accion == "e" and valor not in rueda.EMOCIONES)
         )
@@ -353,7 +354,7 @@ class Bot:
             self.api.responder_boton(boton["id"])
             return
 
-        manejar = self._boton_fila if tipo == "f" else self._boton_registro
+        manejar = {"f": self._boton_fila, "r": self._boton_registro, "p": self._boton_palabra}[tipo]
         aviso = manejar(chat_id, mensaje_id, ident, accion, valor)
         self.api.responder_boton(boton["id"], aviso)
 
@@ -424,6 +425,26 @@ class Bot:
             return "Borrado"
         return None
 
+    def _boton_palabra(self, chat_id: int, mensaje_id: int, _ident: int, accion: str, valor: str) -> str | None:
+        """Botones de /palabra: elegir en la rueda dónde va una palabra que le enseñas."""
+        palabra = self.bd.ajuste(f"palabra:{chat_id}")
+        if not palabra:
+            self.api.editar_teclado(chat_id, mensaje_id, None)
+            return "Vuelve a escribir /palabra seguido de la palabra."
+        if accion == "c":
+            self.api.editar_teclado(chat_id, mensaje_id, _teclado_palabras("p:0", valor))
+        elif accion == "v":
+            self.api.editar_teclado(chat_id, mensaje_id, _teclado_categorias("p:0") + [[_boton("✖️ Cancelar", "p:0:x")]])
+        elif accion == "e":
+            self.bd.aprender(self.usuario_id, palabra, valor)
+            self.aprendidas[palabra] = valor
+            self.api.editar(chat_id, mensaje_id, f"«{html.escape(palabra)}» → {_etiqueta(valor)}\n"
+                                                 "<i>Desde ahora la entiendo así.</i>")
+            return "Guardada"
+        elif accion == "x":
+            self.api.editar(chat_id, mensaje_id, f"Listo, no cambié «{html.escape(palabra)}».")
+        return None
+
     def _borrar(self, chat_id: int, registro_id: int) -> None:
         self.bd.borrar_registro(registro_id)  # también borra su espera de causa, si la había
 
@@ -431,6 +452,7 @@ class Bot:
 
     def _comando(self, chat_id: int, usuario_id: int, texto: str) -> None:
         comando = texto.split()[0][1:].split("@")[0].lower()
+        argumento = texto.split(maxsplit=1)[1] if len(texto.split(maxsplit=1)) > 1 else ""
         if comando in ("start", "ayuda", "help"):
             self.api.enviar(chat_id, self._ayuda())
         elif comando == "panel":
@@ -449,11 +471,62 @@ class Bot:
                 self.api.enviar(chat_id, _resumen(registro, "¿Borro este registro?"), [[
                     _boton("Sí, borrar", f'r:{registro["id"]}:D'), _boton("No", f'r:{registro["id"]}:k'),
                 ]])
+        elif comando == "palabras":
+            self.api.enviar(chat_id, self._texto_palabras())
+        elif comando == "palabra":
+            self._elegir_palabra(chat_id, argumento)
+        elif comando == "olvidar":
+            self._olvidar_palabra(chat_id, argumento)
         elif comando == "cancelar":
             self.bd.quitar_espera(chat_id)
             self.api.enviar(chat_id, "Listo.")
         else:
             self.api.enviar(chat_id, "No conozco ese comando. Prueba /ayuda")
+
+    # --- Palabras que le enseñas al bot -------------------------------------------------
+
+    def _significado(self, palabra: str) -> str:
+        ids = rueda.significado(palabra, self.aprendidas)
+        if len(ids) == 1:
+            return f"Hoy la entiendo como {_etiqueta(ids[0])}."
+        if ids:
+            return "Hoy está en dos lugares de la rueda: " + " o ".join(_etiqueta(i) for i in ids) + "."
+        return "Hoy no la reconozco."
+
+    def _texto_palabras(self) -> str:
+        vocabulario = sorted(self.aprendidas.items())
+        if not vocabulario:
+            return ("Todavía no me enseñaste palabras.\n\n"
+                    "Cuando uses una que no está en la rueda, te pregunto dónde va y la guardo. "
+                    "También puedes enseñarme una: <code>/palabra agotado</code>")
+        lineas = ["<b>Tus palabras</b>", ""]
+        for palabra, emocion in vocabulario[:80]:
+            if emocion in rueda.EMOCIONES:
+                lineas.append(f"• {html.escape(palabra)} → {_etiqueta(emocion)}")
+        if len(vocabulario) > 80:
+            lineas.append(f"… y {len(vocabulario) - 80} más (están todas en la app, en «Mis palabras»).")
+        lineas += ["", "Para cambiar una: <code>/palabra agotado</code>", "Para olvidarla: <code>/olvidar agotado</code>"]
+        return "\n".join(lineas)
+
+    def _elegir_palabra(self, chat_id: int, texto: str) -> None:
+        palabra = rueda.palabra_valida(texto)
+        if palabra is None:
+            self.api.enviar(chat_id, "Escribe la palabra después del comando, por ejemplo: <code>/palabra agotado</code>")
+            return
+        self.bd.guardar_ajuste(f"palabra:{chat_id}", palabra)  # la leen los botones
+        self.api.enviar(chat_id, f"«{html.escape(palabra)}». {self._significado(palabra)}\n\n"
+                                 "<b>¿Dónde va?</b> Elige la categoría:",
+                        _teclado_categorias("p:0") + [[_boton("✖️ Cancelar", "p:0:x")]])
+
+    def _olvidar_palabra(self, chat_id: int, texto: str) -> None:
+        palabra = rueda.palabra_valida(texto)
+        if palabra is None:
+            self.api.enviar(chat_id, "Escribe la palabra después del comando, por ejemplo: <code>/olvidar agotado</code>")
+        elif self.bd.olvidar(self.usuario_id, palabra):
+            self.aprendidas.pop(palabra, None)
+            self.api.enviar(chat_id, f"Listo, olvidé «{html.escape(palabra)}». {self._significado(palabra)}")
+        else:
+            self.api.enviar(chat_id, f"«{html.escape(palabra)}» no estaba entre tus palabras. Mira la lista con /palabras")
 
     def _enviar_enlace_panel(self, chat_id: int, usuario_id: int) -> None:
         if not self.config.url_publica or not self.config.clave_sesion:
@@ -482,6 +555,7 @@ class Bot:
             "/semana — resumen de los últimos 7 días\n"
             "/panel — ver tu rueda y tus registros\n"
             "/rueda — todas las emociones\n"
+            "/palabras — las palabras que me enseñaste (<code>/palabra agotado</code> para cambiar una)\n"
             "/deshacer — borrar el último registro"
         )
         return texto

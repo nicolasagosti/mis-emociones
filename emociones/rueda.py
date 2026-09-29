@@ -432,6 +432,22 @@ def interpretar(texto: str, aprendidas: dict[str, str] | None = None) -> Interpr
     return Interpretacion(emociones, [], _oracion(texto))
 
 
+def palabra_valida(texto: str) -> str | None:
+    """Una palabra (o expresión de hasta 3 palabras) para enseñarle al bot, normalizada;
+    None si no sirve. «Sin Ganas» → «sin ganas»."""
+    palabras = [normalizar(p) for p in re.findall(r"[^\W\d_]+", texto)]
+    if not 1 <= len(palabras) <= 3:
+        return None
+    palabra = " ".join(palabras)
+    return palabra if len(palabra) <= 40 else None
+
+
+def significado(palabra: str, aprendidas: dict[str, str] | None = None) -> tuple[str, ...]:
+    """Cómo entiende hoy el bot esta palabra: las emociones posibles (vacío si no la conoce)."""
+    emociones = interpretar(palabra, aprendidas).emociones
+    return emociones[0].ids if len(emociones) == 1 else ()
+
+
 def es_saludo(texto: str) -> bool:
     items = _items(texto)
     return bool(items) and items[0][0][1] in SALUDOS and not interpretar(texto).emociones

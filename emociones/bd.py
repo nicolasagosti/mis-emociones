@@ -376,6 +376,11 @@ class BaseDeDatos:
                 (usuario_id, palabra, emocion),
             )
 
+    def olvidar(self, usuario_id: int, palabra: str) -> bool:
+        with self._conexion() as con:
+            return con.execute("DELETE FROM vocabulario WHERE usuario_id = ? AND palabra = ?",
+                               (usuario_id, palabra)).rowcount > 0
+
     def vocabulario(self, usuario_id: int) -> dict[str, str]:
         with self._conexion() as con:
             filas = con.execute("SELECT palabra, emocion FROM vocabulario WHERE usuario_id = ?",

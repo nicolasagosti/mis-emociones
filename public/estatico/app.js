@@ -630,7 +630,109 @@ function dibujarTelegram() {
       el('code', null, `/start ${vinculo.codigo}`), '. El código vence en 10 minutos.'));
 }
 
-// --- Menú lateral y secciones (#/diario, #/compartido/<id>, #/compartir, #/telegram) --------------
+// --- Mis palabras: cómo entiende el bot tus palabras ------------------------------------------------
+
+function llenarSelectorEmociones() {
+  const selector = $('#emocion-palabra');
+  if (selector.options.length) return;
+  const vacia = el('option', null, 'Elige dónde va en la rueda…');
+  vacia.value = '';
+  selector.append(vacia);
+  for (const cat of estado.rueda.categorias) {
+    const grupo = document.createElement('optgroup');
+    grupo.label = `${cat.emoji} ${cat.nombre}`;
+    const general = el('option', null, `${cat.nombre} (en general)`);
+    general.value = cat.id;
+    grupo.append(general);
+    // Primero el anillo medio y después el exterior, como en el bot.
+    const emociones = Object.entries(estado.rueda.emociones)
+      .filter(([, e]) => e.categoria === cat.id && e.anillo !== 'centro')
+      .sort(([, a], [, b]) => (a.anillo === 'medio' ? 0 : 1) - (b.anillo === 'medio' ? 0 : 1));
+    for (const [id, emocion] of emociones) {
+      const opcion = el('option', null, emocion.camino.slice(1).join(' › '));
+      opcion.value = id;
+      grupo.append(opcion);
+    }
+    selector.append(grupo);
+  }
+}
+
+async function pedirPalabras(opciones) {
+  const respuesta = await fetch('/api/palabras', opciones);
+  if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
+  return (await respuesta.json()).palabras;
+}
+
+function avisarPalabras(texto) {
+  $('#aviso-palabras').textContent = texto;
+  $('#aviso-palabras').hidden = !texto;
+}
+
+function dibujarPalabras(palabras) {
+  const lista = $('#lista-palabras');
+  if (!palabras.length) {
+    lista.replaceChildren(el('li', 'sin-datos-texto', 'Todavía no le enseñaste palabras. Cuando uses una que '
+      + 'no está en la rueda, el bot te pregunta dónde va y aparece aquí.'));
+    return;
+  }
+  lista.replaceChildren(...palabras.map(({ palabra, emocion }) => {
+    const datos = estado.rueda.emociones[emocion];
+    const cambiar = el('button', 'enlace', 'Cambiar');
+    cambiar.type = 'button';
+    cambiar.addEventListener('click', () => {
+      $('#palabra-nueva').value = palabra;
+      $('#emocion-palabra').value = emocion;
+      $('#emocion-palabra').focus();
+    });
+    const olvidar = el('button', 'quitar', 'Olvidar');
+    olvidar.type = 'button';
+    olvidar.addEventListener('click', () => olvidarPalabra(palabra));
+    return el('li', null,
+      el('div', 'palabra-info', el('strong', null, palabra), ' → ', chip({ emocion, palabra: datos.nombre }),
+        el('span', 'ruta', datos.camino.slice(0, -1).join(' › '))),
+      el('div', 'palabra-acciones', cambiar, olvidar));
+  }));
+}
+
+async function olvidarPalabra(palabra) {
+  if (!window.confirm(`¿Olvidar «${palabra}»? El bot volverá a entenderla como antes, o te preguntará dónde va.`)) return;
+  const respuesta = await fetch(`/api/palabras/${encodeURIComponent(palabra)}`, { method: 'DELETE' });
+  if (respuesta.ok) {
+    avisarPalabras(`Listo, olvidé «${palabra}».`);
+    dibujarPalabras(await pedirPalabras());
+  }
+}
+
+function iniciarPalabras() {
+  $('#form-palabra').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const palabra = $('#palabra-nueva').value.trim().toLowerCase();
+    const emocion = $('#emocion-palabra').value;
+    if (!emocion) {
+      avisarPalabras('Elige dónde va en la rueda.');
+      return;
+    }
+    try {
+      dibujarPalabras(await pedirPalabras({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ palabra, emocion }),
+      }));
+      avisarPalabras(`Listo: «${palabra}» → ${estado.rueda.emociones[emocion].camino.join(' › ')}. `
+        + 'Desde ahora el bot la entiende así.');
+      $('#palabra-nueva').value = '';
+    } catch {
+      avisarPalabras('No pude guardarla: usa una palabra (o hasta tres) con letras.');
+    }
+  });
+}
+
+function mostrarPalabras() {
+  llenarSelectorEmociones();
+  pedirPalabras().then(dibujarPalabras).catch(() => avisarPalabras('No pude cargar tus palabras.'));
+}
+
+// --- Menú lateral y secciones (#/diario, #/compartido/<id>, #/palabras, #/compartir, #/telegram) ---
 
 function abrirMenu() {
   $('#lateral').classList.add('abierto');
@@ -648,7 +750,7 @@ function cerrarMenu() {
 function dibujarLateral() {
   const { servidor } = estado;
   const conCuenta = Boolean(servidor.requiere_sesion && servidor.cuenta);
-  for (const id of ['#grupo-compartidos', '#nav-compartir', '#nav-telegram', '#caja-usuario']) {
+  for (const id of ['#grupo-compartidos', '#nav-palabras', '#nav-compartir', '#nav-telegram', '#caja-usuario']) {
     $(id).hidden = !conCuenta;
   }
   if (!conCuenta) return;
@@ -676,20 +778,22 @@ function mostrarRuta() {
     ? servidor.compartidos.find((d) => String(d.id) === id) || null
     : null;
   let seccion = pedida || 'diario';
-  if (!conCuenta || !['compartido', 'compartir', 'telegram'].includes(seccion) || (seccion === 'compartido' && !compartido)) {
+  if (!conCuenta || !['compartido', 'palabras', 'compartir', 'telegram'].includes(seccion)
+      || (seccion === 'compartido' && !compartido)) {
     seccion = 'diario'; // ruta desconocida, o un diario que ya no te comparten
   }
   const actual = compartido ? `compartido/${compartido.id}` : seccion;
   if (location.hash && location.hash !== `#/${actual}`) history.replaceState(null, '', `#/${actual}`);
 
   const vista = compartido ? 'diario' : seccion;
-  for (const nombre of ['diario', 'compartir', 'telegram']) $(`#vista-${nombre}`).hidden = nombre !== vista;
+  for (const nombre of ['diario', 'palabras', 'compartir', 'telegram']) $(`#vista-${nombre}`).hidden = nombre !== vista;
   for (const enlace of document.querySelectorAll('#lateral a[data-ruta]')) {
     if (enlace.dataset.ruta === actual) enlace.setAttribute('aria-current', 'page');
     else enlace.removeAttribute('aria-current');
   }
   cerrarMenu();
   if (vista === 'telegram') dibujarTelegram();
+  if (vista === 'palabras') mostrarPalabras();
   if (vista === 'diario') mostrarDiario(compartido);
 }
 
@@ -743,7 +847,10 @@ async function iniciar() {
   estado.servidor = servidor;
   $('#app').hidden = false;
   dibujarLateral();
-  if (servidor.requiere_sesion && servidor.cuenta) iniciarCompartir(servidor.url);
+  if (servidor.requiere_sesion && servidor.cuenta) {
+    iniciarCompartir(servidor.url);
+    iniciarPalabras();
+  }
   estado.rueda = await (await fetch('/api/rueda')).json();
   dibujarRueda();
   conectarRueda();

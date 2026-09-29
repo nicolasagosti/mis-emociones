@@ -118,7 +118,21 @@ computadora desconéctalo abriendo `https://api.telegram.org/bot<TOKEN>/deleteWe
 - Si usas una palabra que no está en la rueda (`agotado`), te pregunta dónde va **y la aprende**.
 - En cada registro puedes tocar **➕ Otra emoción** o **🗑 Borrar**.
 
-Comandos: `/hoy`, `/semana`, `/panel`, `/rueda`, `/deshacer`, `/ayuda`.
+Comandos: `/hoy`, `/semana`, `/panel`, `/rueda`, `/palabras`, `/deshacer`, `/ayuda`.
+
+### Tus palabras
+
+Cada persona puede enseñarle al bot sus propias palabras, cambiar dónde va una u olvidarla, desde
+Telegram o desde la sección **Mis palabras** de la app (los cambios valen en los dos lados):
+
+| En Telegram | Qué hace |
+| --- | --- |
+| `/palabras` | Lista las palabras que le enseñaste y dónde van |
+| `/palabra agotado` | Te muestra cómo la entiende hoy y te deja elegir en la rueda dónde va |
+| `/olvidar agotado` | La olvida: vuelve a entenderla como antes, o a preguntarte |
+
+Lo que definas vale también en femenino y en plural, y reemplaza a los sinónimos que trae el bot
+(por ejemplo, puedes hacer que para ti «rabia» sea Molesto en lugar de Furioso).
 
 ## El panel
 
@@ -135,8 +149,9 @@ En Vercel quedan en tu base de datos de Neon; en tu computadora, en `datos/emoci
 
 ## Personalizar
 
-Las palabras, los colores y los sinónimos están en `emociones/rueda.py` (`CATEGORIAS` y
-`SINONIMOS`). La rueda respeta la imagen original, incluidas sus repeticiones: DEPRIMIDO aparece
+Cada persona puede ajustar sus palabras desde la app o Telegram (ver «Tus palabras»). Las
+emociones de la rueda, los colores y los sinónimos que vienen incluidos están en
+`emociones/rueda.py` (`CATEGORIAS` y `SINONIMOS`). La rueda respeta la imagen original, incluidas sus repeticiones: DEPRIMIDO aparece
 dos veces en Tristeza, FURIOSO e IRRITADO en dos anillos de Enojo, y AGRADECIDO está en Calma y
 en Fuerza (por eso el bot pregunta cuál la primera vez).
 

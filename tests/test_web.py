@@ -297,6 +297,33 @@ class TestDiarios(ServidorDePrueba):
         self.assertEqual(self.causas("nueva@gmail.com"), (200, []))
         self.assertEqual(self.causas("nueva@gmail.com", yo["id"])[0], 403)
 
+    def palabras(self, correo, metodo="GET", cuerpo=None):
+        cabeceras = {**self.sesion_de(correo), "Content-Type": "application/json"}
+        estado, _, respuesta = self.pedir("/api/palabras", metodo, cabeceras, cuerpo)
+        return estado, json.loads(respuesta).get("palabras")
+
+    def test_mis_palabras(self):
+        self.assertEqual(self.palabras("yo@gmail.com"), (200, []))
+        nueva = json.dumps({"palabra": "Agotada", "emocion": "tristeza/deprimido"}).encode()
+        self.assertEqual(self.palabras("yo@gmail.com", "POST", nueva),
+                         (200, [{"palabra": "agotada", "emocion": "tristeza/deprimido"}]))
+        cambio = json.dumps({"palabra": "agotada", "emocion": "calma"}).encode()
+        self.palabras("yo@gmail.com", "POST", cambio)
+        self.assertEqual(self.palabras("yo@gmail.com")[1], [{"palabra": "agotada", "emocion": "calma"}])
+        self.assertEqual(self.palabras("otra@gmail.com"), (200, []))  # cada persona tiene las suyas
+        self.assertEqual(self.pedir("/api/palabras/agotada", "DELETE", self.sesion_de("otra@gmail.com"))[0], 404)
+        self.assertEqual(self.pedir("/api/palabras/agotada", "DELETE", self.sesion_de("yo@gmail.com"))[0], 204)
+        self.assertEqual(self.palabras("yo@gmail.com")[1], [])
+
+    def test_palabras_invalidas(self):
+        for cuerpo in ({"palabra": "", "emocion": "calma"}, {"palabra": "hola", "emocion": "no/existe"},
+                       {"palabra": "una dos tres cuatro", "emocion": "calma"}, ["no", "es", "un", "objeto"]):
+            self.assertEqual(self.palabras("yo@gmail.com", "POST", json.dumps(cuerpo).encode())[0], 400, cuerpo)
+        self.assertEqual(self.pedir("/api/palabras")[0], 401)
+        ajeno = {**self.sesion_de("yo@gmail.com"), "Content-Type": "application/json", "Origin": "https://sitio-ajeno.com"}
+        cuerpo = json.dumps({"palabra": "hola", "emocion": "calma"}).encode()
+        self.assertEqual(self.pedir("/api/palabras", "POST", ajeno, cuerpo)[0], 403)
+
     def test_sin_sesion_no_hay_nada(self):
         cabeceras = {"Content-Type": "application/json"}
         self.assertEqual(self.pedir("/api/registros")[0], 401)

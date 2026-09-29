@@ -323,11 +323,34 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 }
 .accesos li.sin-datos-texto { background: none; padding: 0; }
 .accesos .correo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
-.accesos .quitar {
+.form-palabra { display: grid; gap: 8px; }
+.form-palabra label { font-weight: 600; font-size: 0.88rem; }
+.form-palabra input, .form-palabra select {
+  min-width: 0; padding: 9px 12px; border-radius: 10px; font: inherit;
+  border: 1px solid var(--borde); background: var(--fondo); color: var(--texto);
+}
+.form-palabra input:focus-visible, .form-palabra select:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
+.form-palabra .boton { justify-self: start; margin-top: 4px; }
+.nota-palabras { margin: 14px 0 0; font-size: 0.84rem; }
+.lista-palabras { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.lista-palabras li {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 10px 12px; border-radius: 10px; background: var(--pista);
+}
+.lista-palabras li.sin-datos-texto { background: none; padding: 0; }
+.palabra-info { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.palabra-info .ruta { color: var(--texto-suave); font-size: 0.8rem; }
+.palabra-acciones { display: flex; gap: 2px; }
+.enlace {
+  border: 0; background: transparent; color: var(--texto); font-weight: 700; font-size: 0.85rem;
+  cursor: pointer; padding: 2px 6px; border-radius: 6px;
+}
+.enlace:hover { background: var(--tarjeta); }
+.accesos .quitar, .lista-palabras .quitar {
   border: 0; background: transparent; color: #d4382b; font-weight: 700; font-size: 0.85rem;
   cursor: pointer; padding: 2px 4px; border-radius: 6px;
 }
-.accesos .quitar:hover { background: var(--tarjeta); }
+.accesos .quitar:hover, .lista-palabras .quitar:hover { background: var(--tarjeta); }
 
 .acceso { max-width: 640px; margin: 0 auto; padding: 28px 16px 48px; }
 .acceso-marca { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }

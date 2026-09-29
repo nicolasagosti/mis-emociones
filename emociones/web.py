@@ -11,6 +11,9 @@ Rutas:
     GET    /api/accesos                con quién compartiste tu diario
     POST   /api/accesos                compartirlo con un correo de Google: {"correo": "…"}
     DELETE /api/accesos/<correo>       dejar de compartirlo
+    GET    /api/palabras               las palabras que le enseñaste al bot
+    POST   /api/palabras               enseñarle una o cambiar dónde va: {"palabra": "…", "emocion": "<id>"}
+    DELETE /api/palabras/<palabra>     que la olvide
     POST   /api/telegram/vincular      enlace para vincular tu Telegram (vence en 10 minutos)
     POST   /api/telegram/desvincular   desvincular tu Telegram
     POST   /api/telegram               webhook del bot (solo Telegram, con su clave secreta)
@@ -95,6 +98,10 @@ class Panel(BaseHTTPRequestHandler):
             if atendible:
                 bd, usuario = atendible
                 self._json({"accesos": bd.compartidos_de(usuario["id"])})
+        elif url.path == "/api/palabras":
+            atendible = self._con_cuenta()
+            if atendible:
+                self._palabras(*atendible)
         elif url.path == "/auth/google":
             self._google_ida()
         elif url.path == "/auth/google/callback":
@@ -114,7 +121,7 @@ class Panel(BaseHTTPRequestHandler):
         ruta = urlsplit(self.path).path
         if ruta == "/api/telegram":
             self._webhook()
-        elif ruta in ("/api/accesos", "/api/telegram/vincular", "/api/telegram/desvincular"):
+        elif ruta in ("/api/accesos", "/api/palabras", "/api/telegram/vincular", "/api/telegram/desvincular"):
             if not self._mismo_origen():
                 return
             atendible = self._con_cuenta()
@@ -122,6 +129,8 @@ class Panel(BaseHTTPRequestHandler):
                 return
             if ruta == "/api/accesos":
                 self._compartir(*atendible)
+            elif ruta == "/api/palabras":
+                self._guardar_palabra(*atendible)
             elif ruta == "/api/telegram/vincular":
                 self._enlace_para_vincular(atendible[1])
             else:
@@ -132,7 +141,7 @@ class Panel(BaseHTTPRequestHandler):
 
     def _delete(self) -> None:
         partes = urlsplit(self.path).path.strip("/").split("/")
-        if len(partes) != 3 or partes[0] != "api" or partes[1] not in ("registros", "accesos"):
+        if len(partes) != 3 or partes[0] != "api" or partes[1] not in ("registros", "accesos", "palabras"):
             self._error(404)
             return
         if not self._mismo_origen():
@@ -147,6 +156,9 @@ class Panel(BaseHTTPRequestHandler):
             borrado = registro is not None and registro["usuario_id"] == usuario["id"]
             if borrado:
                 bd.borrar_registro(registro["id"])
+        elif partes[1] == "palabras":
+            palabra = rueda.palabra_valida(unquote(partes[2]))
+            borrado = palabra is not None and bd.olvidar(usuario["id"], palabra)
         else:
             borrado = bd.dejar_de_compartir(usuario["id"], unquote(partes[2]).strip().lower())
         if borrado:
@@ -177,16 +189,25 @@ class Panel(BaseHTTPRequestHandler):
         registros = bd.listar_registros(dueno_id, desde=int(desde) if desde.isdigit() else None) if dueno_id else []
         self._json({"registros": registros})
 
-    def _compartir(self, bd: BaseDeDatos, usuario: dict) -> None:
+    def _leer_json(self) -> dict | None:
+        """El cuerpo JSON del pedido; si no es JSON, responde el error y devuelve None."""
         if not self.headers.get("Content-Type", "").startswith("application/json"):
             self._error(415)
-            return
+            return None
         try:
             datos = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 10_000)))
-            correo = str(datos.get("correo", "")).strip().lower()
-        except (ValueError, AttributeError):
+        except ValueError:
+            datos = None
+        if not isinstance(datos, dict):
             self._error(400)
+            return None
+        return datos
+
+    def _compartir(self, bd: BaseDeDatos, usuario: dict) -> None:
+        datos = self._leer_json()
+        if datos is None:
             return
+        correo = str(datos.get("correo", "")).strip().lower()
         if not CORREO.match(correo) or len(correo) > 254:
             self._error(400)
             return
@@ -194,6 +215,24 @@ class Panel(BaseHTTPRequestHandler):
             bd.compartir(usuario["id"], correo, int(time.time()))
             log.info("La cuenta %s compartió su diario con %s", usuario["id"], correo)
         self._json({"accesos": bd.compartidos_de(usuario["id"])})
+
+    def _palabras(self, bd: BaseDeDatos, usuario: dict) -> None:
+        vocabulario = bd.vocabulario(usuario["id"])
+        self._json({"palabras": [{"palabra": p, "emocion": e} for p, e in sorted(vocabulario.items())
+                                 if e in rueda.EMOCIONES]})
+
+    def _guardar_palabra(self, bd: BaseDeDatos, usuario: dict) -> None:
+        """Enseñarle una palabra al bot (o cambiar dónde va): {"palabra": "…", "emocion": "<id>"}."""
+        datos = self._leer_json()
+        if datos is None:
+            return
+        palabra = rueda.palabra_valida(str(datos.get("palabra", "")))
+        emocion = str(datos.get("emocion", ""))
+        if palabra is None or emocion not in rueda.EMOCIONES:
+            self._error(400)
+            return
+        bd.aprender(usuario["id"], palabra, emocion)
+        self._palabras(bd, usuario)
 
     def _enlace_para_vincular(self, usuario: dict) -> None:
         cfg = self.config
