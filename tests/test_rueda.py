@@ -86,6 +86,24 @@ class TestRueda(unittest.TestCase):
         self.assertEqual((r.emociones, r.desconocidas), ([], []))
         self.assertEqual(r.causa, "Hoy: me peleé con mi hermano")
 
+    def test_palabras_incluidas_por_emocion(self):
+        emociones = rueda.como_json()["emociones"]
+        self.assertEqual(emociones["enojo/furioso"]["palabras"][0], "furioso")
+        self.assertIn("rabia", emociones["enojo/furioso"]["palabras"])
+        self.assertIn("gratitud", emociones["calma/agradecido"]["palabras"])
+        self.assertIn("gratitud", emociones["fuerza/agradecido"]["palabras"])
+        self.assertIn("triste", emociones["tristeza"]["palabras"])
+        # Se muestran con tilde, empezando por el nombre de la emoción.
+        self.assertEqual(emociones["felicidad/jugueton"]["palabras"][:2], ["juguetón", "divertido"])
+        self.assertIn("frustración", emociones["enojo/frustrado"]["palabras"])
+        for emocion_id, datos in emociones.items():
+            self.assertEqual(len(datos["palabras"]), len(set(datos["palabras"])), emocion_id)
+
+    def test_sinonimos_con_tilde_se_entienden_igual(self):
+        self.assertEqual(ids("frustración y pánico"), [("enojo/frustrado",), ("miedo",)])
+        self.assertEqual(ids("frustracion y panico"), [("enojo/frustrado",), ("miedo",)])
+        self.assertEqual(ids("vergüenza"), [("tristeza/avergonzado",)])
+
     def test_palabra_valida(self):
         self.assertEqual(rueda.palabra_valida("  Agotada "), "agotada")
         self.assertEqual(rueda.palabra_valida("Sin Ganas"), "sin ganas")

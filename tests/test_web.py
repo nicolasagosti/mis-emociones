@@ -324,6 +324,40 @@ class TestDiarios(ServidorDePrueba):
         cuerpo = json.dumps({"palabra": "hola", "emocion": "calma"}).encode()
         self.assertEqual(self.pedir("/api/palabras", "POST", ajeno, cuerpo)[0], 403)
 
+    def test_corregir_una_emocion_de_un_registro(self):
+        yo = self.estado("yo@gmail.com")["cuenta"]
+        _, [fila] = self.bd.crear_registro(yo["id"], int(time.time()), "El tráfico", "rabia: el tráfico", None,
+                                           [("rabia", "enojo/furioso")])
+        mia = {**self.sesion_de("yo@gmail.com"), "Content-Type": "application/json"}
+        cuerpo = json.dumps({"emocion": "enojo/molesto", "aprender": True}).encode()
+        estado, _, respuesta = self.pedir(f"/api/filas/{fila}", "PATCH", mia, cuerpo)
+        self.assertEqual(estado, 200)
+        self.assertEqual(json.loads(respuesta)["registro"]["emociones"][0]["emocion"], "enojo/molesto")
+        self.assertEqual(self.bd.vocabulario(yo["id"]), {"rabia": "enojo/molesto"})  # el bot la aprendió
+        # Sin «aprender», solo se corrige el registro.
+        self.pedir(f"/api/filas/{fila}", "PATCH", mia, json.dumps({"emocion": "enojo", "aprender": False}).encode())
+        self.assertEqual(self.bd.obtener_fila(fila)["emocion"], "enojo")
+        self.assertEqual(self.bd.vocabulario(yo["id"]), {"rabia": "enojo/molesto"})
+        # Quitarla del registro.
+        self.assertEqual(self.pedir(f"/api/filas/{fila}", "DELETE", self.sesion_de("yo@gmail.com"))[0], 204)
+        self.assertIsNone(self.bd.obtener_fila(fila))
+
+    def test_solo_se_corrigen_registros_propios(self):
+        yo = self.estado("yo@gmail.com")["cuenta"]
+        _, [fila] = self.bd.crear_registro(yo["id"], int(time.time()), "x", None, None, [("triste", "tristeza")])
+        cuerpo = json.dumps({"emocion": "calma", "aprender": True}).encode()
+        otra = {**self.sesion_de("otra@gmail.com"), "Content-Type": "application/json"}
+        self.assertEqual(self.pedir(f"/api/filas/{fila}", "PATCH", otra, cuerpo)[0], 404)
+        self.assertEqual(self.pedir(f"/api/filas/{fila}", "DELETE", otra)[0], 404)
+        self.assertEqual(self.pedir(f"/api/filas/{fila}", "PATCH", {"Content-Type": "application/json"}, cuerpo)[0], 401)
+        mia = {**self.sesion_de("yo@gmail.com"), "Content-Type": "application/json"}
+        invalida = json.dumps({"emocion": "no/existe"}).encode()
+        self.assertEqual(self.pedir(f"/api/filas/{fila}", "PATCH", mia, invalida)[0], 400)
+        ajena = {**mia, "Origin": "https://sitio-ajeno.com"}
+        self.assertEqual(self.pedir(f"/api/filas/{fila}", "PATCH", ajena, cuerpo)[0], 403)
+        self.assertEqual(self.bd.obtener_fila(fila)["emocion"], "tristeza")
+        self.assertEqual(self.bd.vocabulario(yo["id"]), {})
+
     def test_sin_sesion_no_hay_nada(self):
         cabeceras = {"Content-Type": "application/json"}
         self.assertEqual(self.pedir("/api/registros")[0], 401)

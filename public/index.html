@@ -110,13 +110,33 @@
             <p class="nota">Toca una emoción o una categoría para ver sus registros.</p>
           </section>
 
-          <aside class="tarjeta panel-resumen" aria-labelledby="titulo-resumen">
-            <h2 id="titulo-resumen">Resumen</h2>
-            <div class="totales" id="totales"></div>
-            <div class="barras" id="barras"></div>
-            <h3 id="titulo-frecuentes">Lo que más sentiste</h3>
-            <ol class="frecuentes" id="frecuentes"></ol>
-          </aside>
+          <div class="columna-lateral">
+            <section class="tarjeta panel-emocion" id="panel-emocion" hidden aria-labelledby="titulo-emocion">
+              <div class="fila-titulo">
+                <h2 id="titulo-emocion"></h2>
+                <button type="button" class="cerrar" id="cerrar-emocion" aria-label="Cerrar y quitar el filtro">✕</button>
+              </div>
+              <p class="explicacion" id="ruta-emocion"></p>
+              <h3>Tus palabras para esta emoción</h3>
+              <ul class="lista-palabras compacta" id="palabras-emocion"></ul>
+              <form class="form-acceso" id="form-palabra-emocion">
+                <input id="palabra-emocion" required maxlength="40" autocomplete="off"
+                       placeholder="Agregar una palabra" aria-label="Palabra que va en esta emoción">
+                <button type="submit">Agregar</button>
+              </form>
+              <p class="aviso-acceso" id="aviso-emocion" role="status" hidden></p>
+              <h3>Las que ya trae el bot</h3>
+              <p class="incluidas" id="incluidas-emocion"></p>
+            </section>
+
+            <aside class="tarjeta panel-resumen" aria-labelledby="titulo-resumen">
+              <h2 id="titulo-resumen">Resumen</h2>
+              <div class="totales" id="totales"></div>
+              <div class="barras" id="barras"></div>
+              <h3 id="titulo-frecuentes">Lo que más sentiste</h3>
+              <ol class="frecuentes" id="frecuentes"></ol>
+            </aside>
+          </div>
 
           <section class="registros" aria-labelledby="titulo-registros">
             <div class="fila-titulo">
@@ -234,6 +254,22 @@
       </section>
     </div>
   </div>
+
+  <dialog class="dialogo" id="dialogo-fila" aria-labelledby="titulo-fila">
+    <form class="form-palabra" id="form-fila" method="dialog">
+      <h2 id="titulo-fila">Corregir emoción</h2>
+      <p class="explicacion" id="texto-fila"></p>
+      <label for="emocion-fila">Va en</label>
+      <select id="emocion-fila" required></select>
+      <label class="casilla"><input type="checkbox" id="aprender-fila"> <span id="texto-aprender"></span></label>
+      <p class="aviso-acceso" id="aviso-fila" role="status" hidden></p>
+      <div class="botones">
+        <button type="submit" class="boton">Guardar</button>
+        <button type="button" class="boton secundario" id="cancelar-fila">Cancelar</button>
+        <button type="button" class="boton peligro" id="quitar-fila">Quitar del registro</button>
+      </div>
+    </form>
+  </dialog>
 
   <div class="globo" id="globo" role="tooltip" hidden></div>
   <script type="module" src="/estatico/app.js"></script>

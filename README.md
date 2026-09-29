@@ -134,13 +134,19 @@ Telegram o desde la sección **Mis palabras** de la app (los cambios valen en lo
 Lo que definas vale también en femenino y en plural, y reemplaza a los sinónimos que trae el bot
 (por ejemplo, puedes hacer que para ti «rabia» sea Molesto en lugar de Furioso).
 
+En la app también puedes tocar una emoción de la rueda para ver las palabras que la nombran y
+agregarle o quitarle las tuyas, o tocar una emoción en **Tus registros** para moverla a otro lugar
+de la rueda o quitarla de ese registro (y, si quieres, que el bot recuerde esa palabra para la próxima).
+
 ## El panel
 
 - **La rueda** tal como en la imagen, con colores más intensos. Lo que sentiste en el período
   elegido queda resaltado y con la cantidad de veces; el resto se atenúa (se puede apagar).
 - **Resumen** por categoría y las emociones más frecuentes.
 - **Tus registros** en columnas por categoría o como diario cronológico.
-- Toca una emoción o una categoría (en la rueda o en las barras) para filtrar.
+- Toca una emoción o una categoría (en la rueda o en las barras) para filtrar tus registros;
+  en la rueda, además, se abre un panel con sus palabras.
+- Toca una emoción de un registro para corregirla si el bot la ubicó mal.
 - Se actualiza solo cuando llegan mensajes nuevos.
 
 ## Tus datos

@@ -55,78 +55,79 @@ CATEGORIAS = [
 ]
 
 # Palabras que no están en la rueda pero se refieren claramente a una de ellas.
-# Clave: nombre de la rueda (o de la categoría). Valor: palabras separadas por coma.
+# Clave: nombre de la rueda (o de la categoría), sin tildes. Valor: palabras separadas por coma,
+# escritas con tilde porque el panel las muestra (el bot compara sin tildes).
 SINONIMOS = {
-    "enojo": "enojado, enfadado, enfado, cabreado, bronca, indignado, indignacion, enoje, enfade",
-    "furioso": "furia, rabia, rabioso, ira, colera, colerico",
+    "enojo": "enojado, enfadado, enfado, cabreado, bronca, indignado, indignación, enojé, enfadé",
+    "furioso": "furia, rabia, rabioso, ira, cólera, colérico",
     "hostil": "resentido, resentimiento, rencor, rencoroso",
-    "irritado": "irritacion, irritable, fastidio, fastidiado",
-    "estresado": "estres, agobiado, agobio, abrumado, presionado, estrese, estresa",
+    "irritado": "irritación, irritable, fastidio, fastidiado",
+    "estresado": "estrés, agobiado, agobio, abrumado, presionado, estresé, estresa",
     "molesto": "molestia, harto, hastiado",
-    "frustrado": "frustracion, impotencia, impotente, frustre, frustra",
+    "frustrado": "frustración, impotencia, impotente, frustré, frustra",
     "celoso": "celos, envidia, envidioso",
-    "egoista": "egoismo",
+    "egoista": "egoísmo",
     "esceptico": "escepticismo, desconfiado, desconfianza",
-    "miedo": "asustado, temor, temeroso, aterrado, aterrorizado, panico, susto, miedoso, asuste, asusta",
-    "ansioso": "ansiedad, angustia, angustiado, intranquilo, inquieto, angustie",
+    "miedo": "asustado, temor, temeroso, aterrado, aterrorizado, pánico, susto, miedoso, asusté, asusta",
+    "ansioso": "ansiedad, angustia, angustiado, intranquilo, inquieto, angustié",
     "nervioso": "nervios",
-    "preocupado": "preocupacion, preocupe, preocupa",
+    "preocupado": "preocupación, preocupé, preocupa",
     "inseguro": "inseguridad",
-    "confundido": "confusion, desorientado, perdido",
+    "confundido": "confusión, desorientado, perdido",
     "rechazado": "rechazo",
     "amenazado": "amenaza",
-    "excluido": "exclusion",
+    "excluido": "exclusión",
     "debil": "debilidad",
-    "sin valor": "inutil, insignificante",
+    "sin valor": "inútil, insignificante",
     "inferior": "inferioridad",
     "perplejo": "desconcertado, perplejidad",
     "felicidad": "feliz, felices, dichoso, radiante",
-    "alegre": "alegria, alegra",
-    "contenido": "contento, satisfecho, satisfaccion",
-    "entusiasmado": "entusiasmo, emocionado, emocione, emociona",
-    "esperanzado": "esperanza, ilusionado, ilusion, ilusiona",
+    "alegre": "alegría, alegra",
+    "contenido": "contento, satisfecho, satisfacción",
+    "entusiasmado": "entusiasmo, emocionado, emocioné, emociona",
+    "esperanzado": "esperanza, ilusionado, ilusión, ilusiona",
     "optimista": "optimismo",
-    "energetico": "energia, energizado",
-    "jugueton": "divertido, diversion",
-    "excitado": "euforico, euforia",
-    "aceptado": "aceptacion, incluido",
+    "energetico": "energía, energizado",
+    "jugueton": "divertido, diversión",
+    "excitado": "eufórico, euforia",
+    "aceptado": "aceptación, incluido",
     "valorado": "reconocido",
-    "interesado": "interes",
+    "interesado": "interés",
     "curioso": "curiosidad",
-    "calma": "calmado, paz, en paz, calme",
+    "calma": "calmado, paz, en paz, calmé",
     "tranquilo": "tranquilidad",
     "aliviado": "alivio",
     "agradecido": "gratitud, agradecimiento",
     "sereno": "serenidad",
-    "relajado": "relajacion, relax, relaje",
+    "relajado": "relajación, relax, relajé",
     "seguro": "protegido, a salvo",
-    "carinoso": "carino, amor, amado, querido, enamorado, ternura",
+    "carinoso": "cariño, amor, amado, querido, enamorado, ternura",
     "sensible": "sensibilidad",
     "confiado": "confianza",
-    "conectado": "conexion",
+    "conectado": "conexión",
     "considerado": "pensativo, reflexivo",
     "fuerza": "poderoso, capaz",
     "orgulloso": "orgullo",
-    "valiente": "valentia, coraje",
+    "valiente": "valentía, coraje",
     "respetado": "respeto",
     "apreciado": "aprecio",
     "leal": "lealtad",
     "fiel": "fidelidad",
     "empoderado": "empoderamiento, decidido, determinado",
-    "exitoso": "exito",
-    "creativo": "creatividad, inspirado, inspiracion",
-    "enfocado": "concentrado, concentracion, enfoque",
-    "tristeza": ("triste, tristes, desanimado, desanimo, bajoneado, bajon, decaido, melancolico, "
-                 "melancolia, nostalgico, nostalgia, dolido, decepcionado, decepcion, desilusionado, "
-                 "desilusion, entristeci"),
-    "deprimido": "depresion, deprimi, deprime",
+    "exitoso": "éxito",
+    "creativo": "creatividad, inspirado, inspiración",
+    "enfocado": "concentrado, concentración, enfoque",
+    "tristeza": ("triste, tristes, desanimado, desánimo, bajoneado, bajón, decaído, melancólico, "
+                 "melancolía, nostálgico, nostalgia, dolido, decepcionado, decepción, desilusionado, "
+                 "desilusión, entristecí"),
+    "deprimido": "depresión, deprimí, deprime",
     "solitario": "soledad, solo",
     "aislado": "aislamiento",
-    "avergonzado": "verguenza, avergonce",
+    "avergonzado": "vergüenza, avergoncé",
     "culpable": "culpa",
     "arrepentido": "arrepentimiento",
-    "aburrido": "aburrimiento, aburri, aburre",
-    "indiferente": "apatico, apatia, indiferencia",
+    "aburrido": "aburrimiento, aburrí, aburre",
+    "indiferente": "apático, apatía, indiferencia",
     "fragil": "fragilidad",
     "vulnerable": "vulnerabilidad",
 }
@@ -220,6 +221,21 @@ INDICE = _construir_indice()
 AMBIGUAS = {forma for palabra in AMBIGUAS for forma in _variantes(palabra)}
 
 
+def _palabras_incluidas() -> dict[str, list[str]]:
+    """Para cada emoción, las palabras que el bot ya entiende así (su nombre y sus sinónimos), con tilde."""
+    por_nombre: dict[str, set[str]] = {}
+    for emocion in EMOCIONES.values():
+        por_nombre.setdefault(normalizar(emocion.nombre), set()).add(emocion.id)
+    incluidas = {emocion.id: [emocion.nombre.lower()] for emocion in EMOCIONES.values()}
+    for destino, palabras in SINONIMOS.items():
+        for emocion_id in por_nombre[destino]:
+            incluidas[emocion_id] += [p.strip() for p in palabras.split(",") if p.strip()]
+    return incluidas
+
+
+PALABRAS_INCLUIDAS = _palabras_incluidas()
+
+
 def camino(emocion_id: str) -> list[str]:
     """Nombres desde el centro de la rueda: ['Enojo', 'Molesto', 'Frustrado']."""
     nombres = []
@@ -270,7 +286,7 @@ def como_json() -> dict:
         ],
         "emociones": {
             e.id: {"nombre": e.nombre, "categoria": e.categoria, "anillo": e.anillo,
-                   "camino": camino(e.id), "color": color(e.id)}
+                   "camino": camino(e.id), "color": color(e.id), "palabras": PALABRAS_INCLUIDAS[e.id]}
             for e in EMOCIONES.values()
         },
     }

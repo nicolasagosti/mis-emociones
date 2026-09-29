@@ -18,6 +18,7 @@ const estado = {
   diarioListo: false, // ya se mostró algún diario (para no recargar sin necesidad)
   servidor: null, // la última respuesta de /api/estado
   vinculo: null, // {enlace, codigo, bot} mientras vinculas Telegram
+  palabras: null, // las palabras que le enseñaste al bot (se cargan al necesitarlas)
 };
 
 // --- Utilidades ------------------------------------------------------------------
@@ -183,6 +184,10 @@ function conectarRueda() {
   const elegir = (grupo) => {
     const { id, nombre, anillo } = grupo.dataset;
     alternarFiltro({ tipo: anillo === 'centro' ? 'categoria' : 'emocion', id, nombre });
+    // En el celular el panel de la emoción queda debajo de la rueda: se acerca para que se vea.
+    const panel = $('#panel-emocion');
+    const quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!panel.hidden) panel.scrollIntoView({ block: 'nearest', behavior: quieto ? 'auto' : 'smooth' });
   };
   lienzo.addEventListener('click', (e) => {
     const grupo = e.target.closest('.seg');
@@ -288,7 +293,7 @@ function tarjeta(registro, { enDiario = false } = {}) {
   }
 
   const chips = registro.emociones.length
-    ? registro.emociones.map(chip)
+    ? registro.emociones.map(puedeEditar() ? chipEditable : chip)
     : [el('span', 'chip sin-clasificar', 'Sin emoción')];
   const causa = el('p', registro.causa ? 'causa' : 'causa falta', registro.causa || 'Sin causa');
   if (registro.mensaje && registro.mensaje !== registro.causa) causa.title = `Mensaje: ${registro.mensaje}`;
@@ -371,6 +376,7 @@ function dibujar() {
   const conteo = contar(estado.registros);
   actualizarRueda(conteo);
   dibujarResumen(conteo);
+  dibujarPanelEmocion();
 
   const { filtro } = estado;
   $('#filtro').hidden = !filtro;
@@ -632,8 +638,7 @@ function dibujarTelegram() {
 
 // --- Mis palabras: cómo entiende el bot tus palabras ------------------------------------------------
 
-function llenarSelectorEmociones() {
-  const selector = $('#emocion-palabra');
+function llenarSelectorEmociones(selector) {
   if (selector.options.length) return;
   const vacia = el('option', null, 'Elige dónde va en la rueda…');
   vacia.value = '';
@@ -660,7 +665,22 @@ function llenarSelectorEmociones() {
 async function pedirPalabras(opciones) {
   const respuesta = await fetch('/api/palabras', opciones);
   if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
-  return (await respuesta.json()).palabras;
+  estado.palabras = (await respuesta.json()).palabras;
+  return estado.palabras;
+}
+
+async function guardarPalabra(palabra, emocion) {
+  return pedirPalabras({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ palabra, emocion }),
+  });
+}
+
+async function olvidarEnServidor(palabra) {
+  const respuesta = await fetch(`/api/palabras/${encodeURIComponent(palabra)}`, { method: 'DELETE' });
+  if (respuesta.ok) await pedirPalabras();
+  return respuesta.ok;
 }
 
 function avisarPalabras(texto) {
@@ -696,10 +716,9 @@ function dibujarPalabras(palabras) {
 
 async function olvidarPalabra(palabra) {
   if (!window.confirm(`¿Olvidar «${palabra}»? El bot volverá a entenderla como antes, o te preguntará dónde va.`)) return;
-  const respuesta = await fetch(`/api/palabras/${encodeURIComponent(palabra)}`, { method: 'DELETE' });
-  if (respuesta.ok) {
+  if (await olvidarEnServidor(palabra)) {
     avisarPalabras(`Listo, olvidé «${palabra}».`);
-    dibujarPalabras(await pedirPalabras());
+    dibujarPalabras(estado.palabras);
   }
 }
 
@@ -713,11 +732,7 @@ function iniciarPalabras() {
       return;
     }
     try {
-      dibujarPalabras(await pedirPalabras({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ palabra, emocion }),
-      }));
+      dibujarPalabras(await guardarPalabra(palabra, emocion));
       avisarPalabras(`Listo: «${palabra}» → ${estado.rueda.emociones[emocion].camino.join(' › ')}. `
         + 'Desde ahora el bot la entiende así.');
       $('#palabra-nueva').value = '';
@@ -728,8 +743,147 @@ function iniciarPalabras() {
 }
 
 function mostrarPalabras() {
-  llenarSelectorEmociones();
+  llenarSelectorEmociones($('#emocion-palabra'));
   pedirPalabras().then(dibujarPalabras).catch(() => avisarPalabras('No pude cargar tus palabras.'));
+}
+
+// --- Panel de la emoción que tocaste en la rueda: sus palabras -------------------------------------
+
+const puedeEditar = () => estado.rol === 'dueno' && Boolean(estado.servidor?.cuenta);
+
+function avisarEmocion(texto) {
+  $('#aviso-emocion').textContent = texto;
+  $('#aviso-emocion').hidden = !texto;
+}
+
+function dibujarPanelEmocion() {
+  const panel = $('#panel-emocion');
+  const id = estado.filtro?.id;
+  const datos = id && estado.rueda.emociones[id];
+  if (!datos || !puedeEditar()) {
+    panel.hidden = true;
+    return;
+  }
+  if (estado.palabras === null) { // se cargan una vez; después se actualizan al cambiarlas
+    estado.palabras = [];
+    pedirPalabras().then(dibujarPanelEmocion).catch(() => avisarEmocion('No pude cargar tus palabras.'));
+  }
+  panel.hidden = false;
+  $('#titulo-emocion').replaceChildren(chip({ emocion: id, palabra: datos.nombre }));
+  $('#ruta-emocion').textContent = datos.camino.length > 1
+    ? `${datos.camino.join(' › ')}. Lo que agregues aquí, el bot lo entenderá como ${datos.nombre}.`
+    : `Toda la categoría ${datos.nombre}. Lo que agregues aquí, el bot lo entenderá como ${datos.nombre} en general.`;
+
+  const propias = estado.palabras.filter((p) => p.emocion === id);
+  $('#palabras-emocion').replaceChildren(...(propias.length
+    ? propias.map(({ palabra }) => {
+      const quitar = el('button', 'quitar', 'Quitar');
+      quitar.type = 'button';
+      quitar.setAttribute('aria-label', `Quitar «${palabra}»`);
+      quitar.addEventListener('click', async () => {
+        if (await olvidarEnServidor(palabra)) {
+          avisarEmocion(`Listo, «${palabra}» ya no va aquí.`);
+          dibujarPanelEmocion();
+        }
+      });
+      return el('li', null, el('strong', null, palabra), quitar);
+    })
+    : [el('li', 'sin-datos-texto', 'Todavía ninguna.')]));
+
+  // Las incluidas que redefiniste en otra emoción ya no van aquí.
+  const redefinidas = new Set(estado.palabras.filter((p) => p.emocion !== id).map((p) => p.palabra));
+  $('#incluidas-emocion').textContent = datos.palabras.filter((p) => !redefinidas.has(normalizar(p))).join(', ') || '—';
+}
+
+function iniciarPanelEmocion() {
+  $('#cerrar-emocion').addEventListener('click', () => {
+    estado.filtro = null;
+    avisarEmocion('');
+    dibujar();
+  });
+  $('#form-palabra-emocion').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const campo = $('#palabra-emocion');
+    const palabra = campo.value.trim().toLowerCase();
+    const id = estado.filtro?.id;
+    if (!id) return;
+    try {
+      await guardarPalabra(palabra, id);
+      avisarEmocion(`Listo: cuando escribas «${palabra}», el bot lo entenderá como ${estado.rueda.emociones[id].nombre}.`);
+      campo.value = '';
+      dibujarPanelEmocion();
+    } catch {
+      avisarEmocion('No pude guardarla: usa una palabra (o hasta tres) con letras.');
+    }
+  });
+}
+
+// --- Corregir una emoción de un registro (tocando la emoción en «Tus registros») -------------------
+
+let filaEditada = null;
+
+function chipEditable(fila) {
+  const nodo = el('button', 'chip-boton', chip(fila));
+  nodo.type = 'button';
+  nodo.title = 'Tocar para corregir';
+  nodo.addEventListener('click', () => abrirEditorFila(fila));
+  return nodo;
+}
+
+function avisarFila(texto) {
+  $('#aviso-fila').textContent = texto;
+  $('#aviso-fila').hidden = !texto;
+}
+
+function abrirEditorFila(fila) {
+  filaEditada = fila;
+  llenarSelectorEmociones($('#emocion-fila'));
+  const datos = info(fila);
+  const palabra = normalizar(fila.palabra);
+  $('#texto-fila').textContent = datos
+    ? `Escribiste «${fila.palabra}» y hoy está en ${datos.camino.join(' › ')}.`
+    : `Escribiste «${fila.palabra}» y todavía no está en la rueda.`;
+  $('#emocion-fila').value = fila.emocion || '';
+  // Si escribiste el nombre de la emoción, corregir este registro no debería cambiar lo que esa palabra significa.
+  $('#aprender-fila').checked = !(datos && palabra.startsWith(normalizar(datos.nombre).slice(0, -1)));
+  $('#texto-aprender').textContent = `Recordar para la próxima: cuando escriba «${fila.palabra.trim().toLowerCase()}», va aquí`;
+  avisarFila('');
+  $('#dialogo-fila').showModal();
+}
+
+async function recargarDespuesDeCorregir() {
+  $('#dialogo-fila').close();
+  estado.palabras = null; // puede haber aprendido una palabra
+  estado.firma = '';
+  await cargarRegistros();
+}
+
+function iniciarEditorFila() {
+  $('#form-fila').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const emocion = $('#emocion-fila').value;
+    if (!emocion) {
+      avisarFila('Elige dónde va en la rueda.');
+      return;
+    }
+    const respuesta = await fetch(`/api/filas/${filaEditada.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emocion, aprender: $('#aprender-fila').checked }),
+    });
+    if (!respuesta.ok) {
+      avisarFila('No pude guardarlo. Intenta de nuevo en un momento.');
+      return;
+    }
+    await recargarDespuesDeCorregir();
+  });
+  $('#quitar-fila').addEventListener('click', async () => {
+    if (!window.confirm(`¿Quitar «${filaEditada.palabra}» de este registro?`)) return;
+    const respuesta = await fetch(`/api/filas/${filaEditada.id}`, { method: 'DELETE' });
+    if (respuesta.ok) await recargarDespuesDeCorregir();
+    else avisarFila('No pude quitarla. Intenta de nuevo en un momento.');
+  });
+  $('#cancelar-fila').addEventListener('click', () => $('#dialogo-fila').close());
 }
 
 // --- Menú lateral y secciones (#/diario, #/compartido/<id>, #/palabras, #/compartir, #/telegram) ---
@@ -847,9 +1001,11 @@ async function iniciar() {
   estado.servidor = servidor;
   $('#app').hidden = false;
   dibujarLateral();
-  if (servidor.requiere_sesion && servidor.cuenta) {
-    iniciarCompartir(servidor.url);
+  if (servidor.requiere_sesion && servidor.cuenta) iniciarCompartir(servidor.url);
+  if (servidor.cuenta) {
     iniciarPalabras();
+    iniciarPanelEmocion();
+    iniciarEditorFila();
   }
   estado.rueda = await (await fetch('/api/rueda')).json();
   dibujarRueda();

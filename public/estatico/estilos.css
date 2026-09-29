@@ -94,6 +94,27 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 }
 
 .panel-resumen { align-self: start; }
+.columna-lateral { display: grid; gap: 20px; align-self: start; min-width: 0; }
+.panel-emocion h2 .chip { font-size: 1rem; padding: 3px 12px; }
+.panel-emocion h3 { margin-top: 16px; }
+.panel-emocion .form-acceso { margin-top: 10px; }
+.cerrar {
+  flex: none; width: 28px; height: 28px; border: 0; border-radius: 50%;
+  background: var(--pista); color: var(--texto); cursor: pointer;
+}
+.cerrar:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.incluidas { margin: 0; color: var(--texto-suave); font-size: 0.85rem; overflow-wrap: anywhere; }
+.chip-boton { border: 0; padding: 0; background: none; border-radius: 999px; font: inherit; cursor: pointer; }
+.chip-boton:hover .chip { box-shadow: 0 0 0 2px var(--texto-suave); }
+.chip-boton:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.dialogo {
+  width: min(480px, calc(100vw - 32px)); padding: 22px; border: 1px solid var(--borde); border-radius: 16px;
+  background: var(--tarjeta); color: var(--texto); box-shadow: 0 20px 60px rgb(0 0 0 / 30%);
+}
+.dialogo::backdrop { background: rgb(0 0 0 / 40%); }
+.dialogo h2 { margin-bottom: 6px; }
+.form-palabra .casilla { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; color: var(--texto-suave); }
+.form-palabra .botones { margin-top: 6px; }
 
 .tarjeta {
   background: var(--tarjeta); border: 1px solid var(--borde); border-radius: var(--radio);
@@ -297,6 +318,8 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 }
 .boton.secundario { background: var(--pista); color: var(--texto); }
 .boton.telegram { background: #2aabee; color: #fff; }
+.boton.peligro { background: transparent; color: #d4382b; margin-left: auto; }
+.boton.peligro:hover { background: var(--pista); }
 .boton:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
 .botones { display: flex; flex-wrap: wrap; gap: 8px; }
 .nota-telegram { margin: 14px 0 0; color: var(--texto-suave); font-size: 0.82rem; }
@@ -338,6 +361,7 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
   padding: 10px 12px; border-radius: 10px; background: var(--pista);
 }
 .lista-palabras li.sin-datos-texto { background: none; padding: 0; }
+.lista-palabras.compacta li { padding: 6px 10px; }
 .palabra-info { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
 .palabra-info .ruta { color: var(--texto-suave); font-size: 0.8rem; }
 .palabra-acciones { display: flex; gap: 2px; }
