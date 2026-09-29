@@ -33,7 +33,8 @@ class Configuracion:
     api: Callable[[str], Telegram] = Telegram
     google_id: str = ""
     google_secreto: str = ""
-    google_correos: set[str] = field(default_factory=set)  # las cuentas que pueden entrar
+    # Opcional: tu correo. Los datos de cuando la app tenía un solo dueño pasan a esa cuenta.
+    google_correos: set[str] = field(default_factory=set)
     google_token: Callable[[dict], dict] = google.pedir_token
 
     @property
@@ -43,7 +44,7 @@ class Configuracion:
 
     @property
     def google_listo(self) -> bool:
-        return bool(self.google_id and self.google_secreto and self.google_correos)
+        return bool(self.google_id and self.google_secreto)
 
     @property
     def clave_sesion(self) -> str:

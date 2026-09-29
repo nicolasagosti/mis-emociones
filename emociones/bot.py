@@ -206,8 +206,8 @@ class Bot:
         return (
             "👋 Para usar este bot, vincúlalo con tu cuenta:\n"
             f"1. Entra a {html.escape(self.config.url_publica)} con tu cuenta de Google.\n"
-            "2. Toca <b>Vincular Telegram</b>.\n\n"
-            "Si todavía no tienes cuenta, pídele a quien te invitó que comparta su diario con tu correo."
+            "2. En el menú, entra a <b>Telegram</b> y toca <b>Vincular mi Telegram</b>.\n\n"
+            "Si todavía no tienes cuenta, se crea sola la primera vez que entras."
         )
 
     def _vincular(self, chat_id: int, telegram_id: int, codigo: str) -> None:

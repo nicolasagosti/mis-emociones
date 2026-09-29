@@ -15,7 +15,7 @@ Rutas:
     POST   /api/telegram/desvincular   desvincular tu Telegram
     POST   /api/telegram               webhook del bot (solo Telegram, con su clave secreta)
     GET    /auth/google                lleva a Google para elegir la cuenta
-    GET    /auth/google/callback       Google vuelve aquí: si la cuenta puede entrar, abre la sesión
+    GET    /auth/google/callback       Google vuelve aquí: abre la sesión (y crea la cuenta la primera vez)
     GET    /entrar?t=…                 enlace que manda /panel: abre la sesión
     GET    /salir                      cierra la sesión
 """
@@ -323,7 +323,7 @@ class Panel(BaseHTTPRequestHandler):
         cfg = self.config
         if not cfg.google_listo:
             self._pagina(503, "El inicio con Google no está configurado",
-                         "Faltan GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET o GOOGLE_CORREOS en la configuración.")
+                         "Faltan GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET en la configuración.")
             return
         # state evita que otro sitio complete un inicio de sesión a tu nombre; el verificador
         # (PKCE) hace que el código que devuelve Google no sirva sin esta misma cookie.
@@ -354,12 +354,11 @@ class Panel(BaseHTTPRequestHandler):
             self._pagina(403, "No pude verificar tu cuenta de Google", "Vuelve a intentarlo en un momento.", borrar)
             return
         bd = self._bd()
-        if bd is None or cuentas.usuario_para_correo(bd, cfg, correo) is None:
-            log.warning("Intento de entrar con una cuenta de Google sin invitación: %s", correo)
-            self._pagina(403, "Esta cuenta todavía no tiene acceso",
-                         f"{correo} no está invitada. Pídele a alguien que use la app que comparta "
-                         "su diario con este correo.", borrar)
+        if bd is None:
+            self._pagina(503, "No se pudo iniciar sesión", "La base de datos no está disponible. "
+                         "Vuelve a intentarlo en un momento.", borrar)
             return
+        cuentas.usuario_para_correo(bd, cfg, correo)  # la primera vez crea su cuenta y su diario
         self._abrir_sesion(f"g:{correo}", borrar)
 
     def _vuelta_google(self) -> str:

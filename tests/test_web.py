@@ -227,13 +227,14 @@ class TestInicioConGoogle(ServidorDePrueba):
         parametros, cookie = self.ir_a_google()
         self.assertEqual(self.volver(parametros["state"], cookie)[0], 303)
 
-    def test_correo_no_autorizado(self):
-        self.correo = "intruso@gmail.com"
+    def test_cualquier_cuenta_de_google_entra_con_su_propio_diario(self):
+        self.correo = "Nueva@gmail.com"
         parametros, cookie = self.ir_a_google()
-        estado, cabeceras, cuerpo = self.volver(parametros["state"], cookie)
-        self.assertEqual(estado, 403)
-        self.assertIn(b"intruso@gmail.com", cuerpo)
-        self.assertFalse(any(c.startswith("sesion=") for c in cabeceras.get_all("Set-Cookie") or []))
+        estado, cabeceras, _ = self.volver(parametros["state"], cookie)
+        self.assertEqual(estado, 303)
+        [sesion_nueva] = [c for c in cabeceras.get_all("Set-Cookie") if c.startswith("sesion=")]
+        estado = json.loads(self.pedir("/api/estado", cabeceras={"Cookie": sesion_nueva.split(";")[0]})[2])
+        self.assertEqual((estado["cuenta"]["correo"], estado["compartidos"]), ("nueva@gmail.com", []))
 
 
 class TestDiarios(ServidorDePrueba):
@@ -279,10 +280,18 @@ class TestDiarios(ServidorDePrueba):
         self.assertEqual(self.causas("psico@gmail.com", yo["id"])[0], 403)
         self.assertEqual(self.causas("psico@gmail.com"), (200, ["Consulta"]))
 
-    def test_sin_invitacion_no_hay_cuenta(self):
-        self.assertIsNone(self.estado("desconocida@gmail.com")["cuenta"])
-        self.assertEqual(self.causas("desconocida@gmail.com")[0], 401)
-        self.assertEqual(self.compartir("otra@gmail.com", de="desconocida@gmail.com")[0], 401)
+    def test_una_cuenta_nueva_no_ve_nada_ajeno(self):
+        yo = self.estado("yo@gmail.com")["cuenta"]
+        self.bd.crear_registro(yo["id"], int(time.time()), "Llueve", None, None, [("triste", "tristeza")])
+        nueva = self.estado("nueva@gmail.com")
+        self.assertEqual((nueva["cuenta"]["correo"], nueva["compartidos"]), ("nueva@gmail.com", []))
+        self.assertEqual(self.causas("nueva@gmail.com"), (200, []))
+        self.assertEqual(self.causas("nueva@gmail.com", yo["id"])[0], 403)
+
+    def test_sin_sesion_no_hay_nada(self):
+        cabeceras = {"Content-Type": "application/json"}
+        self.assertEqual(self.pedir("/api/registros")[0], 401)
+        self.assertEqual(self.pedir("/api/accesos", "POST", cabeceras, b'{"correo": "a@b.co"}')[0], 401)
 
     def test_quien_fue_invitada_puede_compartir_su_diario(self):
         self.compartir("psico@gmail.com")

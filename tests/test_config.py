@@ -49,8 +49,9 @@ class TestConfiguracion(unittest.TestCase):
                                 "GOOGLE_CORREOS": "Yo@Gmail.com, otra@gmail.com,"})
         self.assertEqual(config.google_correos, {"yo@gmail.com", "otra@gmail.com"})
         self.assertTrue(config.google_listo)
-        # Sin lista de correos no se habilita: cualquiera con una cuenta de Google podría entrar.
-        self.assertFalse(desde_entorno({"GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "s"}).google_listo)
+        # GOOGLE_CORREOS es opcional: cualquier cuenta de Google puede crear su diario.
+        self.assertTrue(desde_entorno({"GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "s"}).google_listo)
+        self.assertFalse(desde_entorno({"GOOGLE_CLIENT_ID": "id"}).google_listo)
 
 
 def id_token(**datos):

@@ -1,7 +1,7 @@
-"""Cuentas: quién es cada persona (por su Google o su Telegram) y quién puede usar la app.
+"""Cuentas: quién es cada persona (por su Google o su Telegram).
 
-Pueden crear su cuenta los correos de GOOGLE_CORREOS y las personas con las que alguien
-compartió su diario. Cada cuenta tiene su propio diario y puede vincular su Telegram.
+Cualquier persona con una cuenta de Google puede crear la suya: tiene su propio diario, ve los
+que otras personas le compartieron (en solo lectura) y puede vincular su Telegram.
 """
 
 from __future__ import annotations
@@ -27,13 +27,11 @@ def _administrador_unico(config: Configuracion) -> str | None:
     return next(iter(config.google_correos)) if len(config.google_correos) == 1 else None
 
 
-def usuario_para_correo(bd: BaseDeDatos, config: Configuracion, correo: str) -> dict | None:
-    """La cuenta de este correo de Google; se crea la primera vez que entra, si puede entrar."""
+def usuario_para_correo(bd: BaseDeDatos, config: Configuracion, correo: str) -> dict:
+    """La cuenta de este correo de Google (ya verificado por Google); se crea la primera vez que entra."""
     usuario = bd.usuario_por_correo(correo)
     if usuario is not None:
         return usuario
-    if not (correo in config.google_correos or bd.fue_invitado(correo)):
-        return None
     usuario = bd.crear_usuario(correo=correo)
     if correo == _administrador_unico(config):
         adoptar_legado(bd, usuario["id"])

@@ -342,9 +342,6 @@ class BaseDeDatos:
         return self._uno("SELECT 1 AS si FROM compartidos WHERE usuario_id = ? AND correo = ?",
                          (usuario_id, correo)) is not None
 
-    def fue_invitado(self, correo: str) -> bool:
-        return self._uno("SELECT 1 AS si FROM compartidos WHERE correo = ?", (correo,)) is not None
-
     # --- Palabras aprendidas y ajustes -------------------------------------------------
 
     def aprender(self, usuario_id: int, palabra: str, emocion: str) -> None:

@@ -110,15 +110,16 @@ class TestQuienPuedeEntrar(unittest.TestCase):
     def tearDown(self):
         self.carpeta.cleanup()
 
-    def test_administradores_e_invitados(self):
-        self.assertIsNone(cuentas.usuario_para_correo(self.bd, CONFIG, "nadie@gmail.com"))
+    def test_cualquier_cuenta_de_google_tiene_su_diario(self):
         yo = cuentas.usuario_para_correo(self.bd, CONFIG, "yo@gmail.com")
-        self.bd.compartir(yo["id"], "psico@gmail.com", 0)
-        psico = cuentas.usuario_para_correo(self.bd, CONFIG, "psico@gmail.com")
-        self.assertEqual(psico["correo"], "psico@gmail.com")
-        # Aunque después le quiten el acceso a ese diario, conserva su propia cuenta.
-        self.bd.dejar_de_compartir(yo["id"], "psico@gmail.com")
-        self.assertEqual(cuentas.usuario_para_correo(self.bd, CONFIG, "psico@gmail.com")["id"], psico["id"])
+        nueva = cuentas.usuario_para_correo(self.bd, CONFIG, "nueva@gmail.com")
+        self.assertNotEqual(yo["id"], nueva["id"])
+        self.assertEqual(cuentas.usuario_para_correo(self.bd, CONFIG, "nueva@gmail.com")["id"], nueva["id"])
+        self.assertEqual(self.bd.compartidos_conmigo("nueva@gmail.com"), [])
+        # Si le comparten un diario y después se lo dejan de compartir, conserva su cuenta.
+        self.bd.compartir(yo["id"], "nueva@gmail.com", 0)
+        self.bd.dejar_de_compartir(yo["id"], "nueva@gmail.com")
+        self.assertEqual(cuentas.usuario_para_correo(self.bd, CONFIG, "nueva@gmail.com")["id"], nueva["id"])
 
     def test_en_tu_computadora_el_primero_que_escribe_es_el_dueno(self):
         sin_google = Configuracion()

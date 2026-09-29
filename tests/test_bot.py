@@ -233,7 +233,7 @@ class TestBotConCuentas(Ayudantes, unittest.TestCase):
 
     def test_sin_vincular_explica_como_hacerlo(self):
         self.escribir("triste: llueve")
-        self.assertIn("Vincular Telegram", self.api.enviados[-1][0])
+        self.assertIn("Vincular mi Telegram", self.api.enviados[-1][0])
         self.assertEqual(self.registros(), [])
 
     def test_vincular_desde_la_app(self):

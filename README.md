@@ -57,24 +57,23 @@ dirección (el bot sigue conectado a la versión principal).
    | --- | --- |
    | `GOOGLE_CLIENT_ID` | el ID de cliente (termina en `.apps.googleusercontent.com`) |
    | `GOOGLE_CLIENT_SECRET` | el secreto (empieza con `GOCSPX-`) |
-   | `GOOGLE_CORREOS` | tu Gmail (las cuentas que pueden entrar sin que nadie las invite) |
+   | `GOOGLE_CORREOS` | opcional: tu Gmail (si usabas la versión con un solo dueño, tus datos pasan a esa cuenta) |
 
-6. Vuelve a publicar. En la página aparece **Entrar con Google**.
+6. **Publica la app en Google**: *Google Auth Platform* → **Audience** → **Publish app**. Mientras
+   esté "en prueba", solo pueden entrar las cuentas que agregues como *Test user*. Como la app solo
+   pide el correo, Google no exige verificarla.
+7. Vuelve a publicar en Vercel. En la página aparece **Entrar con Google**: cualquier persona con una
+   cuenta de Google puede entrar, y la primera vez se le crea su propio diario.
 
 ### Compartir tu diario (por ejemplo, con tu psicóloga)
 
-1. **Una sola vez**, en Google Cloud: *Google Auth Platform* → **Audience** → **Publish app**.
-   Así cualquier cuenta de Google puede pasar por la pantalla de Google; igual solo entran las
-   personas invitadas. Como la app solo pide el correo, Google no exige verificarla.
-   (Si prefieres dejarla "en prueba", agrega a cada persona también como *Test user*.)
-2. En el menú de la izquierda → **Compartir mi diario**, escribe su correo de Google y toca **Dar acceso**.
-3. Envíale el enlace de la app. Entra con **Entrar con Google** y tiene **su propio diario** (y
+1. En el menú de la izquierda → **Compartir mi diario**, escribe su correo de Google y toca **Dar acceso**.
+2. Envíale el enlace de la app. Entra con **Entrar con Google** y tiene **su propio diario** (y
    puede vincular su Telegram); el tuyo lo ve en **Compartidos conmigo**, en solo lectura.
-4. Para dejar de compartir, toca **Quitar**: deja de ver tu diario en el acto (su cuenta sigue).
+3. Para dejar de compartir, toca **Quitar**: deja de ver tu diario en el acto (su cuenta sigue).
 
 ### Cuentas y seguridad
-- Pueden crear cuenta los correos de `GOOGLE_CORREOS` y las personas con las que alguien
-  compartió su diario. Nadie más puede entrar, aunque tenga el enlace.
+- Cualquier persona con una cuenta de Google (con el correo verificado) puede crear su cuenta.
 - Cada persona ve y modifica solo su diario; los compartidos son de solo lectura. Los permisos se
   revisan en cada pedido, así que dejar de compartir tiene efecto inmediato.
 - Para entrar: con Google, o con el enlace que manda el bot con `/panel` (firmado, vence en 10
