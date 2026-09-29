@@ -34,8 +34,8 @@ dirección (el bot sigue conectado a la versión principal).
 
    Vuelve a publicar (paso 2) y **abre la página una vez**: eso conecta el bot con Telegram.
 5. **Configura el inicio de sesión con Google** (ver abajo).
-6. **Entra con Google y toca «Vincular Telegram»**: se abre el bot, tocas *Iniciar* y desde ese
-   momento lo que le escribas va a tu diario. Cada persona vincula su propio Telegram; el bot es
+6. **Entra con Google y abre la sección Telegram** del menú de la izquierda → *Vincular mi Telegram*
+   → *Abrir Telegram* → *Iniciar*. Desde ese momento lo que le escribas va a tu diario. Cada persona vincula su propio Telegram; el bot es
    uno solo para todas.
 
 ### Inicio de sesión con Google
@@ -67,7 +67,7 @@ dirección (el bot sigue conectado a la versión principal).
    Así cualquier cuenta de Google puede pasar por la pantalla de Google; igual solo entran las
    personas invitadas. Como la app solo pide el correo, Google no exige verificarla.
    (Si prefieres dejarla "en prueba", agrega a cada persona también como *Test user*.)
-2. En **Mi diario** → **Compartir tu diario**, escribe su correo de Google y toca **Dar acceso**.
+2. En el menú de la izquierda → **Compartir mi diario**, escribe su correo de Google y toca **Dar acceso**.
 3. Envíale el enlace de la app. Entra con **Entrar con Google** y tiene **su propio diario** (y
    puede vincular su Telegram); el tuyo lo ve en **Compartidos conmigo**, en solo lectura.
 4. Para dejar de compartir, toca **Quitar**: deja de ver tu diario en el acto (su cuenta sigue).

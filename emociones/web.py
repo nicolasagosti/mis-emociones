@@ -203,7 +203,9 @@ class Panel(BaseHTTPRequestHandler):
         if cfg.token not in _nombres_de_bot:
             _nombres_de_bot[cfg.token] = cfg.api(cfg.token).llamar("getMe")["username"]
         codigo = sesion.firmar_vinculo(cfg.clave_sesion, usuario["id"], DURACION_VINCULO)
-        self._json({"enlace": f"https://t.me/{_nombres_de_bot[cfg.token]}?start={codigo}"})
+        bot = _nombres_de_bot[cfg.token]
+        # El código sirve también escrito a mano («/start <código>») si Telegram está en otro dispositivo.
+        self._json({"enlace": f"https://t.me/{bot}?start={codigo}", "codigo": codigo, "bot": bot})
 
     # --- Cuentas y sesión --------------------------------------------------------------
 

@@ -8,24 +8,24 @@
   <link rel="stylesheet" href="/estatico/estilos.css">
 </head>
 <body>
-  <header class="cabecera">
-    <div>
-      <h1>Mis emociones</h1>
-      <p class="subtitulo">La rueda de los sentimientos · Gloria Willcox, 1982</p>
-    </div>
-    <div class="acciones">
-      <div class="segmentado" id="periodos" role="group" aria-label="Período" hidden>
-        <button type="button" data-periodo="hoy">Hoy</button>
-        <button type="button" data-periodo="7">7 días</button>
-        <button type="button" data-periodo="30">30 días</button>
-        <button type="button" data-periodo="todo">Todo</button>
-      </div>
-      <span class="cuenta" id="cuenta" hidden></span>
-      <a class="salir" id="salir" href="/salir" hidden>Salir</a>
-    </div>
-  </header>
+  <svg hidden>
+    <symbol id="i-logo" viewBox="-10 -10 20 20"><path d="M0 0L0-9A9 9 0 0 1 7.8-4.5Z" fill="#EB5547"/><path d="M0 0L7.8-4.5A9 9 0 0 1 7.8 4.5Z" fill="#A95BD0"/><path d="M0 0L7.8 4.5A9 9 0 0 1 0 9Z" fill="#EB4783"/><path d="M0 0L0 9A9 9 0 0 1-7.8 4.5Z" fill="#F8B928"/><path d="M0 0L-7.8 4.5A9 9 0 0 1-7.8-4.5Z" fill="#4CC27A"/><path d="M0 0L-7.8-4.5A9 9 0 0 1 0-9Z" fill="#3D9BE0"/></symbol>
+    <symbol id="i-diario" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></symbol>
+    <symbol id="i-personas" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-compartir" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+    <symbol id="i-telegram" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+    <symbol id="i-salir" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  </svg>
 
   <section class="acceso" id="acceso" hidden>
+    <header class="acceso-marca">
+      <svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg>
+      <div>
+        <h1>Mis emociones</h1>
+        <p class="subtitulo">La rueda de los sentimientos · Gloria Willcox, 1982</p>
+      </div>
+    </header>
     <div class="tarjeta">
       <h2>Entra a tu panel</h2>
       <a class="boton-google" id="entrar-google" href="/auth/google" hidden>
@@ -45,88 +45,162 @@
     </div>
   </section>
 
-  <div class="franja">
-  <nav class="pestanas" id="pestanas" aria-label="Diarios" hidden>
-    <div class="segmentado" role="group">
-      <button type="button" data-pestana="mio">Mi diario</button>
-      <button type="button" data-pestana="compartidos">Compartidos conmigo <span class="contador" id="contador-compartidos"></span></button>
-    </div>
-    <div class="diarios-compartidos" id="diarios-compartidos" hidden></div>
-  </nav>
-  <p class="aviso-lectura" id="aviso-lectura" hidden></p>
-  <div class="vacio compartidos-vacio" id="compartidos-vacio" hidden>
-    <p><strong>Nadie compartió su diario contigo todavía.</strong></p>
-    <p>Cuando alguien lo haga, aparecerá aquí para que puedas verlo.</p>
-  </div>
-  </div>
-
-  <main class="contenido" id="contenido" hidden>
-    <section class="tarjeta panel-rueda" aria-labelledby="titulo-rueda">
-      <div class="fila-titulo">
-        <h2 id="titulo-rueda">Tu rueda</h2>
-        <label class="interruptor">
-          <input type="checkbox" id="resaltar" checked>
-          <span class="pista-interruptor" aria-hidden="true"></span>
-          <span id="texto-resaltar">Resaltar lo que sentí</span>
-        </label>
-      </div>
-      <svg id="rueda" class="rueda resaltar" viewBox="-345 -345 690 690" role="img"
-           aria-label="Rueda de los sentimientos con tus emociones resaltadas"></svg>
-      <p class="nota">Toca una emoción o una categoría para ver sus registros.</p>
-    </section>
-
-    <aside class="tarjeta panel-resumen" aria-labelledby="titulo-resumen">
-      <h2 id="titulo-resumen">Resumen</h2>
-      <div class="totales" id="totales"></div>
-      <div class="barras" id="barras"></div>
-      <h3 id="titulo-frecuentes">Lo que más sentiste</h3>
-      <ol class="frecuentes" id="frecuentes"></ol>
-
-      <section class="compartir" id="compartir" hidden aria-labelledby="titulo-compartir">
-        <h3 id="titulo-compartir">Compartir tu diario</h3>
-        <p class="explicacion">Quien agregues entra con su cuenta de Google en
-          <strong id="enlace-panel"></strong>: tiene su propio diario y ve el tuyo en
-          «Compartidos conmigo», sin poder modificarlo.</p>
-        <form class="form-acceso" id="form-acceso">
-          <input type="email" id="correo-acceso" placeholder="correo@gmail.com" required
-                 autocomplete="off" aria-label="Correo de Google de la persona">
-          <button type="submit">Dar acceso</button>
-        </form>
-        <p class="aviso-acceso" id="aviso-acceso" role="status" hidden></p>
-        <ul class="accesos" id="accesos"></ul>
-      </section>
-
-      <section class="telegram" id="telegram" hidden aria-labelledby="titulo-telegram">
-        <h3 id="titulo-telegram">Telegram</h3>
-        <p class="explicacion" id="telegram-estado"></p>
-        <div class="telegram-acciones">
-          <button type="button" id="telegram-boton"></button>
-          <a class="telegram-abrir" id="telegram-abrir" target="_blank" rel="noopener" hidden>Abrir Telegram para vincular</a>
+  <div class="app" id="app" hidden>
+    <aside class="lateral" id="lateral" aria-label="Menú" tabindex="-1">
+      <a class="marca" href="#/diario">
+        <svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg>
+        Mis emociones
+      </a>
+      <nav class="navegacion" aria-label="Secciones">
+        <a href="#/diario" data-ruta="diario"><svg aria-hidden="true"><use href="#i-diario"/></svg>Mi diario</a>
+        <div class="grupo" id="grupo-compartidos" hidden>
+          <p class="titulo-grupo"><svg aria-hidden="true"><use href="#i-personas"/></svg>Compartidos conmigo</p>
+          <div class="subnav" id="nav-compartidos"></div>
         </div>
-      </section>
+        <a href="#/compartir" data-ruta="compartir" id="nav-compartir" hidden><svg aria-hidden="true"><use href="#i-compartir"/></svg>Compartir mi diario</a>
+        <a href="#/telegram" data-ruta="telegram" id="nav-telegram" hidden><svg aria-hidden="true"><use href="#i-telegram"/></svg>Telegram<span class="insignia" id="insignia-telegram" hidden>Vincular</span></a>
+      </nav>
+      <div class="caja-usuario" id="caja-usuario" hidden>
+        <span class="avatar" id="avatar" aria-hidden="true"></span>
+        <div class="datos-usuario">
+          <p class="nombre" id="nombre-usuario"></p>
+          <p class="detalle" id="detalle-usuario"></p>
+        </div>
+        <a class="salir" href="/salir" aria-label="Cerrar sesión" title="Cerrar sesión"><svg aria-hidden="true"><use href="#i-salir"/></svg></a>
+      </div>
     </aside>
+    <div class="velo" id="velo" hidden></div>
 
-    <section class="registros" aria-labelledby="titulo-registros">
-      <div class="fila-titulo">
-        <h2 id="titulo-registros">Tus registros</h2>
-        <div class="filtro" id="filtro" hidden>
-          <span id="filtro-texto"></span>
-          <button type="button" id="quitar-filtro" aria-label="Quitar filtro">✕</button>
+    <div class="principal">
+      <header class="barra-movil">
+        <a class="marca" href="#/diario"><svg class="logo" aria-hidden="true"><use href="#i-logo"/></svg>Mis emociones</a>
+        <button type="button" class="boton-menu" id="abrir-menu" aria-label="Abrir menú" aria-controls="lateral"
+                aria-expanded="false"><svg aria-hidden="true"><use href="#i-menu"/></svg></button>
+      </header>
+
+      <section class="vista" id="vista-diario" hidden>
+        <header class="cabecera">
+          <div>
+            <h1 id="titulo-vista">Mi diario</h1>
+            <p class="subtitulo">La rueda de los sentimientos · Gloria Willcox, 1982</p>
+          </div>
+          <div class="segmentado" id="periodos" role="group" aria-label="Período">
+            <button type="button" data-periodo="hoy">Hoy</button>
+            <button type="button" data-periodo="7">7 días</button>
+            <button type="button" data-periodo="30">30 días</button>
+            <button type="button" data-periodo="todo">Todo</button>
+          </div>
+        </header>
+        <div class="franja"><p class="aviso-lectura" id="aviso-lectura" hidden></p></div>
+
+        <main class="contenido" id="contenido">
+          <section class="tarjeta panel-rueda" aria-labelledby="titulo-rueda">
+            <div class="fila-titulo">
+              <h2 id="titulo-rueda">Tu rueda</h2>
+              <label class="interruptor">
+                <input type="checkbox" id="resaltar" checked>
+                <span class="pista-interruptor" aria-hidden="true"></span>
+                <span id="texto-resaltar">Resaltar lo que sentí</span>
+              </label>
+            </div>
+            <svg id="rueda" class="rueda resaltar" viewBox="-345 -345 690 690" role="img"
+                 aria-label="Rueda de los sentimientos con tus emociones resaltadas"></svg>
+            <p class="nota">Toca una emoción o una categoría para ver sus registros.</p>
+          </section>
+
+          <aside class="tarjeta panel-resumen" aria-labelledby="titulo-resumen">
+            <h2 id="titulo-resumen">Resumen</h2>
+            <div class="totales" id="totales"></div>
+            <div class="barras" id="barras"></div>
+            <h3 id="titulo-frecuentes">Lo que más sentiste</h3>
+            <ol class="frecuentes" id="frecuentes"></ol>
+          </aside>
+
+          <section class="registros" aria-labelledby="titulo-registros">
+            <div class="fila-titulo">
+              <h2 id="titulo-registros">Tus registros</h2>
+              <div class="filtro" id="filtro" hidden>
+                <span id="filtro-texto"></span>
+                <button type="button" id="quitar-filtro" aria-label="Quitar filtro">✕</button>
+              </div>
+              <div class="segmentado" id="vistas" role="group" aria-label="Vista">
+                <button type="button" data-vista="categorias">Por categoría</button>
+                <button type="button" data-vista="diario">Diario</button>
+              </div>
+            </div>
+            <div class="tablero" id="tablero"></div>
+            <div class="diario" id="diario" hidden></div>
+            <div class="vacio" id="vacio" hidden>
+              <p><strong>Todavía no hay registros en este período.</strong></p>
+              <p class="solo-propio">Escríbele a tu bot de Telegram cómo te sientes y qué lo causó, por ejemplo:</p>
+              <p class="solo-propio"><code>Frustrado, ansioso: mi jefe cambió la fecha de entrega</code></p>
+            </div>
+          </section>
+        </main>
+      </section>
+
+      <section class="vista" id="vista-compartir" hidden>
+        <header class="cabecera">
+          <div>
+            <h1>Compartir mi diario</h1>
+            <p class="subtitulo">Por ejemplo, con tu psicóloga. Lo ve en solo lectura: no puede modificar nada.</p>
+          </div>
+        </header>
+        <div class="paginas">
+          <section class="tarjeta" aria-labelledby="titulo-dar-acceso">
+            <h2 id="titulo-dar-acceso">Dar acceso</h2>
+            <p class="explicacion">Escribe su correo de Google.</p>
+            <form class="form-acceso" id="form-acceso">
+              <input type="email" id="correo-acceso" placeholder="correo@gmail.com" required
+                     autocomplete="off" aria-label="Correo de Google de la persona">
+              <button type="submit">Dar acceso</button>
+            </form>
+            <p class="aviso-acceso" id="aviso-acceso" role="status" hidden></p>
+            <h3>Con quién lo compartes</h3>
+            <ul class="accesos" id="accesos"></ul>
+          </section>
+          <section class="tarjeta" aria-labelledby="titulo-como-entra">
+            <h2 id="titulo-como-entra">Cómo entra</h2>
+            <ol class="pasos-lista">
+              <li>Envíale el enlace de la app: <strong id="enlace-panel"></strong></li>
+              <li>Entra con <strong>Entrar con Google</strong>, usando el correo que agregaste.</li>
+              <li>Tiene su propio diario, y el tuyo lo ve en <strong>Compartidos conmigo</strong>.</li>
+            </ol>
+            <p class="explicacion">Puedes quitarle el acceso cuando quieras: deja de ver tu diario en el acto.</p>
+          </section>
         </div>
-        <div class="segmentado" id="vistas" role="group" aria-label="Vista">
-          <button type="button" data-vista="categorias">Por categoría</button>
-          <button type="button" data-vista="diario">Diario</button>
+      </section>
+
+      <section class="vista" id="vista-telegram" hidden>
+        <header class="cabecera">
+          <div>
+            <h1>Telegram</h1>
+            <p class="subtitulo">Registra tus emociones escribiéndole a un bot, en el momento en que las sientes.</p>
+          </div>
+        </header>
+        <div class="paginas">
+          <section class="tarjeta" aria-labelledby="titulo-vincular">
+            <h2 id="titulo-vincular"></h2>
+            <p class="explicacion" id="texto-vincular"></p>
+            <div class="acciones-telegram" id="acciones-telegram"></div>
+            <p class="aviso-acceso" id="aviso-telegram" role="status" hidden></p>
+          </section>
+          <section class="tarjeta" aria-labelledby="titulo-como-escribirle">
+            <h2 id="titulo-como-escribirle">Cómo escribirle</h2>
+            <p class="explicacion">La emoción y después qué la causó. El bot la ubica en la rueda.</p>
+            <ul class="ejemplos">
+              <li><code>Frustrado, ansioso: mi jefe cambió la fecha</code><span>Dos emociones con su causa</span></li>
+              <li><code>Tranquila porque terminé el proyecto</code><span>También sirve «porque» o un guion</span></li>
+              <li><code>triste</code><span>La guarda y te pregunta qué la causó</span></li>
+              <li><code>Hoy me sentí triste y sola en la fiesta</code><span>Encuentra las emociones en la frase</span></li>
+            </ul>
+            <p class="explicacion">Comandos: <code>/hoy</code>, <code>/semana</code>, <code>/panel</code>, <code>/rueda</code>
+              y <code>/deshacer</code>. Si usas una palabra que no está en la rueda, te pregunta dónde va y la aprende.</p>
+          </section>
         </div>
-      </div>
-      <div class="tablero" id="tablero"></div>
-      <div class="diario" id="diario" hidden></div>
-      <div class="vacio" id="vacio" hidden>
-        <p><strong>Todavía no hay registros en este período.</strong></p>
-        <p class="solo-propio">Escríbele a tu bot de Telegram cómo te sientes y qué lo causó, por ejemplo:</p>
-        <p class="solo-propio"><code>Frustrado, ansioso: mi jefe cambió la fecha de entrega</code></p>
-      </div>
-    </section>
-  </main>
+      </section>
+    </div>
+  </div>
 
   <div class="globo" id="globo" role="tooltip" hidden></div>
   <script type="module" src="/estatico/app.js"></script>

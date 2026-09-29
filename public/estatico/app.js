@@ -14,9 +14,10 @@ const estado = {
   filtro: null, // { tipo: 'categoria' | 'emocion', id, nombre }
   refresco: null,
   rol: 'dueno', // 'dueno' en tu diario; 'lectura' en uno que te compartieron
-  pestana: 'mio', // 'mio' o 'compartidos'
   diario: null, // null = tu diario; {id, correo} = uno que te compartieron
+  diarioListo: false, // ya se mostró algún diario (para no recargar sin necesidad)
   servidor: null, // la última respuesta de /api/estado
+  vinculo: null, // {enlace, codigo, bot} mientras vinculas Telegram
 };
 
 // --- Utilidades ------------------------------------------------------------------
@@ -464,7 +465,7 @@ function conectarControles() {
   estado.refresco = setInterval(() => { if (!document.hidden) cargarRegistros(); }, REFRESCO_MS);
 }
 
-// --- Acceso (fuera de tu computadora, el panel pide entrar con el enlace de /panel) -------
+// --- Acceso (fuera de tu computadora, el panel pide entrar) ------------------------------------
 
 const AYUDA_BOT = {
   falta_token: 'Se conecta solo cuando agregues el token.',
@@ -475,9 +476,7 @@ const AYUDA_BOT = {
 };
 
 function mostrarAcceso(servidor) {
-  for (const id of ['#contenido', '#periodos', '#salir', '#cuenta', '#pestanas', '#aviso-lectura', '#compartidos-vacio']) {
-    $(id).hidden = true;
-  }
+  $('#app').hidden = true;
   $('#acceso').hidden = false;
   $('#entrar-google').hidden = !servidor.google;
   $('#acceso-telegram').hidden = servidor.google;
@@ -496,7 +495,7 @@ function mostrarAcceso(servidor) {
     el('div', null, el('strong', null, titulo), listo ? null : el('span', null, ayuda)))));
 }
 
-// --- Compartir el panel (solo el dueño) ----------------------------------------------------
+// --- Compartir tu diario ------------------------------------------------------------------------
 
 async function pedirAccesos(opciones) {
   const respuesta = await fetch('/api/accesos', opciones);
@@ -534,7 +533,6 @@ async function quitarAcceso(correo) {
 }
 
 function iniciarCompartir(url) {
-  $('#compartir').hidden = false;
   $('#enlace-panel').textContent = url.replace(/^https?:\/\//, '');
   $('#form-acceso').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -555,60 +553,165 @@ function iniciarCompartir(url) {
   pedirAccesos().then(dibujarAccesos).catch(() => avisarAcceso('No pude cargar con quién compartiste tu diario.'));
 }
 
-// --- Pestañas: tu diario y los que te compartieron ------------------------------------------
+// --- Telegram -----------------------------------------------------------------------------------
 
-function mostrarPestana(pestana) {
-  const compartidos = estado.servidor?.compartidos || [];
-  const enCompartidos = pestana === 'compartidos';
-  estado.pestana = pestana;
-  guardar('pestana', pestana);
-  for (const boton of document.querySelectorAll('#pestanas button')) {
-    boton.setAttribute('aria-pressed', String(boton.dataset.pestana === pestana));
+function avisarTelegram(texto) {
+  $('#aviso-telegram').textContent = texto;
+  $('#aviso-telegram').hidden = !texto;
+}
+
+function boton(texto, clase, alTocar) {
+  const nodo = el('button', `boton ${clase}`, texto);
+  nodo.type = 'button';
+  nodo.addEventListener('click', alTocar);
+  return nodo;
+}
+
+async function pedirVinculo() {
+  const respuesta = await fetch('/api/telegram/vincular', { method: 'POST' });
+  if (!respuesta.ok) {
+    avisarTelegram('No pude crear el enlace. Intenta de nuevo en un momento.');
+    return;
   }
-  $('#contador-compartidos').textContent = compartidos.length ? String(compartidos.length) : '';
+  estado.vinculo = await respuesta.json();
+  avisarTelegram('');
+  dibujarTelegram();
+}
 
-  estado.diario = enCompartidos
-    ? compartidos.find((d) => d.id === estado.diario?.id) || compartidos[0] || null
+async function yaLoVincule() {
+  if (await actualizarCuenta() && !estado.servidor.cuenta.telegram) {
+    avisarTelegram('Todavía no aparece vinculado: ¿tocaste «Iniciar» en el chat del bot?');
+  }
+}
+
+async function desvincularTelegram() {
+  if (!window.confirm('¿Desvincular tu Telegram? El bot dejará de guardar en tu diario lo que le escribas.')) return;
+  await fetch('/api/telegram/desvincular', { method: 'POST' });
+  estado.vinculo = null;
+  avisarTelegram('');
+  await actualizarCuenta();
+}
+
+function dibujarTelegram() {
+  const { servidor, vinculo } = estado;
+  const acciones = $('#acciones-telegram');
+  if (!servidor.token) {
+    $('#titulo-vincular').textContent = 'El bot de Telegram no está configurado';
+    $('#texto-vincular').textContent = 'Falta la variable TELEGRAM_TOKEN (los pasos están en el README).';
+    acciones.replaceChildren();
+    return;
+  }
+  if (servidor.cuenta.telegram) {
+    estado.vinculo = null;
+    avisarTelegram('');
+    $('#titulo-vincular').textContent = 'Tu Telegram está vinculado';
+    $('#texto-vincular').textContent = '✓ Todo lo que le escribas al bot se guarda en tu diario.';
+    acciones.replaceChildren(boton('Desvincular', 'secundario', desvincularTelegram));
+    return;
+  }
+  $('#titulo-vincular').textContent = 'Vincula tu Telegram';
+  $('#texto-vincular').textContent =
+    'Se hace una sola vez. Después, cada mensaje que le mandes al bot se guarda en tu diario.';
+  if (!vinculo) {
+    acciones.replaceChildren(boton('Vincular mi Telegram', 'telegram', pedirVinculo));
+    return;
+  }
+  const abrir = el('a', 'boton telegram', 'Abrir Telegram');
+  abrir.href = vinculo.enlace;
+  abrir.target = '_blank';
+  abrir.rel = 'noopener';
+  acciones.replaceChildren(
+    el('ol', 'pasos-lista',
+      el('li', null, 'Toca ', el('strong', null, 'Abrir Telegram'), `: se abre el chat con @${vinculo.bot}.`),
+      el('li', null, 'Toca ', el('strong', null, 'Iniciar'), ' (o «Start») en Telegram.'),
+      el('li', null, 'Vuelve aquí y toca ', el('strong', null, 'Ya lo vinculé'), '.')),
+    el('div', 'botones', abrir, boton('Ya lo vinculé', 'secundario', yaLoVincule)),
+    el('p', 'nota-telegram', '¿Telegram está en otro dispositivo? Mándale al bot ',
+      el('code', null, `/start ${vinculo.codigo}`), '. El código vence en 10 minutos.'));
+}
+
+// --- Menú lateral y secciones (#/diario, #/compartido/<id>, #/compartir, #/telegram) --------------
+
+function abrirMenu() {
+  $('#lateral').classList.add('abierto');
+  $('#velo').hidden = false;
+  $('#abrir-menu').setAttribute('aria-expanded', 'true');
+  $('#lateral').focus(); // con el teclado, Tab recorre las secciones desde aquí
+}
+
+function cerrarMenu() {
+  $('#lateral').classList.remove('abierto');
+  $('#velo').hidden = true;
+  $('#abrir-menu').setAttribute('aria-expanded', 'false');
+}
+
+function dibujarLateral() {
+  const { servidor } = estado;
+  const conCuenta = Boolean(servidor.requiere_sesion && servidor.cuenta);
+  for (const id of ['#grupo-compartidos', '#nav-compartir', '#nav-telegram', '#caja-usuario']) {
+    $(id).hidden = !conCuenta;
+  }
+  if (!conCuenta) return;
+  $('#insignia-telegram').hidden = !servidor.token || servidor.cuenta.telegram;
+  const nombre = servidor.cuenta.correo || 'Telegram';
+  $('#nombre-usuario').textContent = nombre;
+  $('#detalle-usuario').textContent = servidor.cuenta.correo ? 'Cuenta de Google' : 'Entraste con Telegram';
+  $('#avatar').textContent = nombre[0].toUpperCase();
+  $('#nav-compartidos').replaceChildren(...(servidor.compartidos.length
+    ? servidor.compartidos.map((diario) => {
+      const enlace = el('a', null, diario.correo);
+      enlace.href = `#/compartido/${diario.id}`;
+      enlace.dataset.ruta = `compartido/${diario.id}`;
+      enlace.title = diario.correo;
+      return enlace;
+    })
+    : [el('p', 'nada', 'Nadie todavía')]));
+}
+
+function mostrarRuta() {
+  const { servidor } = estado;
+  const conCuenta = Boolean(servidor.requiere_sesion && servidor.cuenta);
+  const [pedida, id] = location.hash.replace(/^#\/?/, '').split('/');
+  const compartido = pedida === 'compartido'
+    ? servidor.compartidos.find((d) => String(d.id) === id) || null
     : null;
-  estado.rol = estado.diario ? 'lectura' : 'dueno';
-  const propio = !estado.diario;
+  let seccion = pedida || 'diario';
+  if (!conCuenta || !['compartido', 'compartir', 'telegram'].includes(seccion) || (seccion === 'compartido' && !compartido)) {
+    seccion = 'diario'; // ruta desconocida, o un diario que ya no te comparten
+  }
+  const actual = compartido ? `compartido/${compartido.id}` : seccion;
+  if (location.hash && location.hash !== `#/${actual}`) history.replaceState(null, '', `#/${actual}`);
+
+  const vista = compartido ? 'diario' : seccion;
+  for (const nombre of ['diario', 'compartir', 'telegram']) $(`#vista-${nombre}`).hidden = nombre !== vista;
+  for (const enlace of document.querySelectorAll('#lateral a[data-ruta]')) {
+    if (enlace.dataset.ruta === actual) enlace.setAttribute('aria-current', 'page');
+    else enlace.removeAttribute('aria-current');
+  }
+  cerrarMenu();
+  if (vista === 'telegram') dibujarTelegram();
+  if (vista === 'diario') mostrarDiario(compartido);
+}
+
+function mostrarDiario(compartido) {
+  const cambio = !estado.diarioListo || (estado.diario?.id ?? null) !== (compartido?.id ?? null);
+  const propio = !compartido;
+  estado.diario = compartido;
+  estado.rol = propio ? 'dueno' : 'lectura';
+  $('#titulo-vista').textContent = propio ? 'Mi diario' : `Diario de ${compartido.correo}`;
+  $('#aviso-lectura').hidden = propio;
+  if (!propio) $('#aviso-lectura').textContent = `Estás viendo el diario de ${compartido.correo} · solo lectura`;
   $('#titulo-rueda').textContent = propio ? 'Tu rueda' : 'Su rueda';
   $('#texto-resaltar').textContent = propio ? 'Resaltar lo que sentí' : 'Resaltar lo que sintió';
   $('#titulo-frecuentes').textContent = propio ? 'Lo que más sentiste' : 'Lo que más sintió';
   $('#titulo-registros').textContent = propio ? 'Tus registros' : 'Sus registros';
-  const sinDiarios = enCompartidos && !estado.diario;
-  $('#compartidos-vacio').hidden = !sinDiarios;
-  $('#contenido').hidden = sinDiarios;
-  $('#periodos').hidden = sinDiarios;
-  $('#aviso-lectura').hidden = !estado.diario;
-  if (estado.diario) $('#aviso-lectura').textContent = `Estás viendo el diario de ${estado.diario.correo} · solo lectura`;
-  const conCuenta = Boolean(estado.servidor?.requiere_sesion && estado.servidor.cuenta);
-  $('#compartir').hidden = enCompartidos || !conCuenta;
-  $('#telegram').hidden = enCompartidos || !conCuenta || !estado.servidor.token;
-  dibujarSelectorDiarios(enCompartidos ? compartidos : []);
-
+  if (!cambio) return;
+  estado.diarioListo = true;
   estado.filtro = null;
   estado.firma = '';
   estado.registros = [];
-  if (!sinDiarios) {
-    dibujar();
-    cargarRegistros();
-  }
-}
-
-function dibujarSelectorDiarios(compartidos) {
-  const contenedor = $('#diarios-compartidos');
-  contenedor.hidden = compartidos.length < 2; // con uno solo no hace falta elegir
-  contenedor.replaceChildren(...compartidos.map((diario) => {
-    const boton = el('button', null, diario.correo);
-    boton.type = 'button';
-    boton.setAttribute('aria-pressed', String(diario.id === estado.diario?.id));
-    boton.addEventListener('click', () => {
-      estado.diario = diario;
-      mostrarPestana('compartidos');
-    });
-    return boton;
-  }));
+  dibujar();
+  cargarRegistros();
 }
 
 async function actualizarCuenta() {
@@ -618,51 +721,17 @@ async function actualizarCuenta() {
     mostrarAcceso(servidor);
     return false;
   }
-  const antes = JSON.stringify(estado.servidor?.compartidos);
   estado.servidor = servidor;
-  dibujarTelegram();
-  if (JSON.stringify(servidor.compartidos) !== antes) mostrarPestana(estado.pestana);
+  dibujarLateral();
+  mostrarRuta();
   return true;
 }
 
-// --- Vincular Telegram ------------------------------------------------------------------------
-
-function dibujarTelegram() {
-  const cuenta = estado.servidor?.cuenta;
-  if (!cuenta) return;
-  const boton = $('#telegram-boton');
-  $('#telegram-abrir').hidden = true;
-  if (cuenta.telegram) {
-    $('#telegram-estado').textContent = '✓ Tu Telegram está vinculado: lo que le escribas al bot aparece en tu diario.';
-    boton.textContent = 'Desvincular';
-    boton.className = 'secundario';
-  } else {
-    $('#telegram-estado').textContent = 'Vincula tu Telegram para registrar tus emociones escribiéndole al bot.';
-    boton.textContent = 'Vincular Telegram';
-    boton.className = '';
-  }
-}
-
-function iniciarTelegram() {
-  dibujarTelegram();
-  $('#telegram-boton').addEventListener('click', async () => {
-    if (estado.servidor.cuenta.telegram) {
-      if (!window.confirm('¿Desvincular tu Telegram? El bot dejará de guardar en tu diario lo que le escribas.')) return;
-      await fetch('/api/telegram/desvincular', { method: 'POST' });
-      await actualizarCuenta();
-      return;
-    }
-    const respuesta = await fetch('/api/telegram/vincular', { method: 'POST' });
-    if (!respuesta.ok) {
-      $('#telegram-estado').textContent = 'No pude crear el enlace. Intenta de nuevo en un momento.';
-      return;
-    }
-    const abrir = $('#telegram-abrir');
-    abrir.href = (await respuesta.json()).enlace;
-    abrir.hidden = false;
-    $('#telegram-estado').textContent =
-      'Toca «Abrir Telegram para vincular» y después «Iniciar» en el chat del bot. El enlace vence en 10 minutos.';
-  });
+function conectarMenu() {
+  $('#abrir-menu').addEventListener('click', abrirMenu);
+  $('#velo').addEventListener('click', cerrarMenu);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarMenu(); });
+  window.addEventListener('hashchange', mostrarRuta);
 }
 
 async function iniciar() {
@@ -672,23 +741,15 @@ async function iniciar() {
     return;
   }
   estado.servidor = servidor;
-  $('#salir').hidden = !servidor.requiere_sesion;
-  if (servidor.requiere_sesion && servidor.cuenta) {
-    $('#cuenta').hidden = false;
-    $('#cuenta').textContent = servidor.cuenta.correo || 'Telegram';
-    $('#pestanas').hidden = false;
-    $('#pestanas').addEventListener('click', (e) => {
-      const boton = e.target.closest('button[data-pestana]');
-      if (boton) mostrarPestana(boton.dataset.pestana);
-    });
-    iniciarCompartir(servidor.url);
-    iniciarTelegram();
-  }
+  $('#app').hidden = false;
+  dibujarLateral();
+  if (servidor.requiere_sesion && servidor.cuenta) iniciarCompartir(servidor.url);
   estado.rueda = await (await fetch('/api/rueda')).json();
   dibujarRueda();
   conectarRueda();
   conectarControles();
-  mostrarPestana(servidor.requiere_sesion ? leer('pestana', 'mio') : 'mio');
+  conectarMenu();
+  mostrarRuta();
 }
 
 iniciar();

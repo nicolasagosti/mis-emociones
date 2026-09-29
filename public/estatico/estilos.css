@@ -7,6 +7,7 @@
   --linea: #ffffff;
   --marco: #a9b8c6;
   --pista: #ece7e1;
+  --lateral: #efe9e2;
   --sombra: 0 1px 2px rgb(40 30 20 / 6%), 0 8px 24px rgb(40 30 20 / 6%);
   --texto-rueda: #1d1a17;
   --radio: 20px;
@@ -23,6 +24,7 @@
     --linea: #1e1c22;
     --marco: #4a5663;
     --pista: #2c2931;
+    --lateral: #18171c;
     --sombra: none;
     color-scheme: dark;
   }
@@ -37,6 +39,7 @@
   --linea: #1e1c22;
   --marco: #4a5663;
   --pista: #2c2931;
+  --lateral: #18171c;
   --sombra: none;
   color-scheme: dark;
 }
@@ -197,41 +200,111 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .vacio { text-align: center; padding: 36px 16px; color: var(--texto-suave); background: var(--tarjeta); border: 1px dashed var(--borde); border-radius: var(--radio); }
 .vacio p { margin: 6px 0; }
 
-.acciones { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.cuenta {
-  color: var(--texto-suave); font-size: 0.85rem; font-weight: 600;
-  max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+/* --- Menú lateral (fijo en computadora; en el celular se abre con ☰) ----------------- */
+.app { display: flex; min-height: 100vh; }
+.lateral {
+  position: sticky; top: 0; height: 100vh; height: 100dvh; width: 260px; flex: none; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 22px; padding: 22px 14px;
+  background: var(--lateral); border-right: 1px solid var(--borde);
 }
+.lateral:focus { outline: none; }
+.principal { flex: 1; min-width: 0; }
+.lateral .marca, .barra-movil .marca {
+  display: flex; align-items: center; gap: 10px; padding: 0 10px;
+  color: var(--texto); font-weight: 800; font-size: 1.05rem; text-decoration: none;
+}
+.logo { width: 26px; height: 26px; flex: none; }
+.navegacion { display: flex; flex-direction: column; gap: 2px; }
+.navegacion a, .titulo-grupo {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px;
+  color: var(--texto-suave); font-weight: 600; font-size: 0.93rem; text-decoration: none;
+}
+.navegacion a:hover { background: var(--pista); color: var(--texto); }
+.navegacion a[aria-current="page"] { background: var(--tarjeta); color: var(--texto); box-shadow: var(--sombra); }
+.navegacion a:focus-visible, .boton-menu:focus-visible, .caja-usuario .salir:focus-visible {
+  outline: 2px solid var(--texto); outline-offset: 2px;
+}
+.navegacion svg, .boton-menu svg, .caja-usuario .salir svg {
+  width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.titulo-grupo { margin: 8px 0 0; }
+.subnav { display: flex; flex-direction: column; gap: 2px; padding-left: 28px; }
+.subnav a { display: block; padding: 7px 12px; font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subnav .nada { margin: 0; padding: 4px 12px; color: var(--texto-suave); font-size: 0.82rem; }
+.insignia {
+  margin-left: auto; padding: 1px 8px; border-radius: 999px;
+  background: #2aabee; color: #fff; font-size: 0.7rem; font-weight: 700;
+}
+.caja-usuario {
+  margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border: 1px solid var(--borde); border-radius: 12px; background: var(--tarjeta);
+}
+.avatar {
+  width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%;
+  background: var(--pista); font-weight: 800; font-size: 0.85rem;
+}
+.datos-usuario { flex: 1; min-width: 0; }
+.datos-usuario p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.datos-usuario .nombre { font-weight: 600; font-size: 0.86rem; }
+.datos-usuario .detalle { color: var(--texto-suave); font-size: 0.75rem; }
+.caja-usuario .salir { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--texto-suave); }
+.caja-usuario .salir:hover { background: var(--pista); color: var(--texto); }
+
+.barra-movil { display: none; }
+.boton-menu {
+  display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--texto); cursor: pointer;
+}
+.boton-menu:hover { background: var(--pista); }
+.velo { position: fixed; inset: 0; z-index: 35; background: rgb(0 0 0 / 35%); }
+@media (max-width: 1023px) {
+  .lateral {
+    position: fixed; z-index: 40; top: 0; left: 0; width: min(290px, 85vw);
+    transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: 0 0 40px rgb(0 0 0 / 20%);
+  }
+  .lateral.abierto { transform: none; }
+  .barra-movil {
+    display: flex; position: sticky; top: 0; z-index: 30; height: 56px; padding: 0 12px 0 6px;
+    align-items: center; justify-content: space-between;
+    background: var(--fondo); border-bottom: 1px solid var(--borde);
+  }
+}
+@media (min-width: 1024px) { .velo { display: none !important; } }
 
 .franja { max-width: 1280px; margin: 0 auto; padding-inline: 16px; }
 @media (min-width: 700px) { .franja { padding-inline: 28px; } }
-.pestanas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
-.contador {
-  display: inline-block; min-width: 1.5em; margin-left: 4px; padding: 0 6px; border-radius: 999px;
-  background: var(--texto); color: var(--tarjeta); font-size: 0.72rem; line-height: 1.6; text-align: center;
-}
-.contador:empty { display: none; }
-.diarios-compartidos { display: flex; flex-wrap: wrap; gap: 6px; }
-.diarios-compartidos button {
-  border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto-suave); cursor: pointer;
-  border-radius: 999px; padding: 5px 12px; font-weight: 600; font-size: 0.85rem;
-}
-.diarios-compartidos button[aria-pressed="true"] { background: var(--texto); border-color: var(--texto); color: var(--tarjeta); }
 .aviso-lectura {
   margin: 0 0 16px; padding: 10px 16px; border-radius: 12px; background: var(--pista);
   font-weight: 600; font-size: 0.92rem; overflow-wrap: anywhere;
 }
-.compartidos-vacio { margin-bottom: 48px; }
 
-.compartir, .telegram { margin-top: 24px; padding-top: 2px; border-top: 1px solid var(--borde); }
-.compartir .explicacion, .telegram .explicacion { color: var(--texto-suave); font-size: 0.88rem; margin: 0 0 12px; }
-.compartir .explicacion strong { color: var(--texto); overflow-wrap: anywhere; }
-.telegram-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-#telegram-boton, .telegram-abrir {
-  border: 0; border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none;
-  background: #2aabee; color: #fff; font-weight: 700; font-size: 0.92rem;
+/* --- Páginas: compartir y Telegram ------------------------------------------------------ */
+.paginas {
+  display: grid; gap: 20px; align-items: start; max-width: 1280px; margin: 0 auto; padding: 0 16px 48px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
 }
-#telegram-boton.secundario { background: var(--pista); color: var(--texto); }
+@media (min-width: 700px) { .paginas { padding-inline: 28px; } }
+.paginas h2 { margin-bottom: 8px; }
+.explicacion { color: var(--texto-suave); font-size: 0.9rem; margin: 0 0 14px; }
+.explicacion strong { color: var(--texto); overflow-wrap: anywhere; }
+.pasos-lista { margin: 0 0 16px; padding-left: 1.3em; display: grid; gap: 6px; color: var(--texto-suave); font-size: 0.92rem; }
+.pasos-lista strong { color: var(--texto); overflow-wrap: anywhere; }
+.boton {
+  display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 10px; padding: 9px 16px;
+  background: var(--texto); color: var(--tarjeta); font: inherit; font-weight: 700; font-size: 0.92rem;
+  cursor: pointer; text-decoration: none;
+}
+.boton.secundario { background: var(--pista); color: var(--texto); }
+.boton.telegram { background: #2aabee; color: #fff; }
+.boton:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.nota-telegram { margin: 14px 0 0; color: var(--texto-suave); font-size: 0.82rem; }
+.ejemplos { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 10px; }
+.ejemplos li { display: grid; gap: 3px; }
+.ejemplos code { width: fit-content; }
+.ejemplos span { color: var(--texto-suave); font-size: 0.85rem; }
+
 .form-acceso { display: flex; gap: 8px; }
 .form-acceso input {
   flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; font: inherit;
@@ -255,13 +328,11 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
   cursor: pointer; padding: 2px 4px; border-radius: 6px;
 }
 .accesos .quitar:hover { background: var(--tarjeta); }
-.salir {
-  color: var(--texto-suave); text-decoration: none; font-weight: 600; font-size: 0.9rem;
-  padding: 6px 12px; border-radius: 999px; border: 1px solid var(--borde);
-}
-.salir:hover { color: var(--texto); background: var(--tarjeta); }
 
-.acceso { max-width: 640px; margin: 0 auto; padding: 8px 16px 48px; }
+.acceso { max-width: 640px; margin: 0 auto; padding: 28px 16px 48px; }
+.acceso-marca { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.acceso-marca .logo { width: 44px; height: 44px; }
+.acceso-marca h1 { margin: 0; }
 .acceso .tarjeta { padding: 28px; }
 .acceso h1, .acceso h2 { margin-bottom: 12px; }
 .acceso p { color: var(--texto-suave); margin: 0 0 12px; }
