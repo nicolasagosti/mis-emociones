@@ -76,6 +76,11 @@ def verificar_vinculo(secreto: str, valor: str | None, ahora: float | None = Non
     return usuario_id
 
 
+def huella(token: str) -> str:
+    """Identifica al token sin revelarlo: cambia si cambias el token del bot."""
+    return hashlib.sha256(b"mis-emociones/huella:" + token.encode()).hexdigest()[:16]
+
+
 def secreto_webhook(token: str) -> str:
     """Telegram lo manda en cada aviso al webhook; así se sabe que el aviso es auténtico."""
     return hmac.new(token.encode(), b"mis-emociones/webhook", hashlib.sha256).hexdigest()

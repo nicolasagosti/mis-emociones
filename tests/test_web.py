@@ -152,6 +152,15 @@ class TestPanelEnVercel(ServidorDePrueba):
         self.assertEqual(parametros["secret_token"], sesion.secreto_webhook(TOKEN))
         self.pedir("/api/estado")
         self.assertEqual([m for m, _ in self.api.llamadas], ["setWebhook", "setMyCommands"])
+        # Una instancia nueva (sin la memoria de esta) tampoco se lo vuelve a pedir a Telegram.
+        _webhooks_conectados.clear()
+        self.assertEqual(json.loads(self.pedir("/api/estado")[2])["bot"], "conectado")
+        self.assertEqual(len(self.api.llamadas), 2)
+        # Si cambias el token del bot, se vuelve a conectar.
+        self.bd.guardar_ajuste("webhook", "https://emociones.example/api/telegram|otro-token")
+        _webhooks_conectados.clear()
+        self.pedir("/api/estado")
+        self.assertEqual(len(self.api.llamadas), 4)
 
     def test_webhook(self):
         aviso = json.dumps({"update_id": 1, "message": {

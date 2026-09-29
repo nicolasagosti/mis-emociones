@@ -279,11 +279,15 @@ class Panel(BaseHTTPRequestHandler):
             "base_de_datos": bd is not None,
             "google": cfg.google_listo,
             "token": bool(cfg.token),
-            "bot": self._estado_bot(bd is not None),
+            "bot": self._estado_bot(bd),
         }
 
-    def _estado_bot(self, hay_bd: bool) -> str:
-        """En producción de Vercel, conecta el webhook del bot la primera vez."""
+    def _estado_bot(self, bd: BaseDeDatos | None) -> str:
+        """En producción de Vercel, conecta el webhook del bot la primera vez.
+
+        La base recuerda a qué dirección y con qué token quedó conectado, así las instancias
+        nuevas no se lo vuelven a pedir a Telegram (que limita esos pedidos).
+        """
         cfg = self.config
         if not cfg.token:
             return "falta_token"
@@ -291,20 +295,24 @@ class Panel(BaseHTTPRequestHandler):
             return "local"
         if not cfg.produccion:
             return "solo_produccion"
-        if not hay_bd:
+        if bd is None:
             return "espera_base_de_datos"
         url = f"{cfg.url_publica}/api/telegram"
-        if url not in _webhooks_conectados:
-            try:
-                conectar_webhook(cfg.api(cfg.token), url, cfg.token)
-            except ErrorTelegram as error:
-                log.warning("No pude conectar el webhook: %s", error)
-                return "token_invalido" if error.codigo in (401, 404) else "error"
-            except OSError as error:
-                log.warning("No pude conectar el webhook: %s", error)
-                return "error"
+        marca = f"{url}|{sesion.huella(cfg.token)}"
+        if url in _webhooks_conectados or bd.ajuste("webhook") == marca:
             _webhooks_conectados.add(url)
-            log.info("Webhook del bot conectado a %s", url)
+            return "conectado"
+        try:
+            conectar_webhook(cfg.api(cfg.token), url, cfg.token)
+        except ErrorTelegram as error:
+            log.warning("No pude conectar el webhook: %s", error)
+            return "token_invalido" if error.codigo in (401, 404) else "error"
+        except OSError as error:
+            log.warning("No pude conectar el webhook: %s", error)
+            return "error"
+        bd.guardar_ajuste("webhook", marca)
+        _webhooks_conectados.add(url)
+        log.info("Webhook del bot conectado a %s", url)
         return "conectado"
 
     def _entrar(self, firma: str) -> None:
