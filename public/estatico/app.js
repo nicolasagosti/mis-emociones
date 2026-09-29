@@ -283,35 +283,56 @@ function visibles() {
 
 function tarjeta(registro, { enDiario = false } = {}) {
   const fecha = new Date(registro.creado_en * 1000);
-  let borrar = null; // quien solo tiene acceso de lectura no puede borrar
+  const editable = puedeEditar();
+  let acciones = null; // quien solo tiene acceso de lectura no puede editar ni borrar
   if (estado.rol === 'dueno') {
-    borrar = el('button', 'borrar', '×');
+    let editar = null;
+    if (editable) {
+      editar = el('button', 'editar', '✎');
+      editar.type = 'button';
+      editar.title = 'Editar registro';
+      editar.setAttribute('aria-label', 'Editar registro');
+    }
+    const borrar = el('button', 'borrar', '×');
     borrar.type = 'button';
     borrar.title = 'Borrar registro';
     borrar.setAttribute('aria-label', 'Borrar registro');
     borrar.addEventListener('click', () => borrarRegistro(registro.id));
+    acciones = el('div', 'acciones-registro', editar, borrar);
   }
 
   const chips = registro.emociones.length
-    ? registro.emociones.map(puedeEditar() ? chipEditable : chip)
+    ? registro.emociones.map((fila) => {
+      const nodo = chip(fila);
+      if (editable) nodo.dataset.fila = fila.id; // para abrir el editor en la emoción que tocaste
+      return nodo;
+    })
     : [el('span', 'chip sin-clasificar', 'Sin emoción')];
   const causa = el('p', registro.causa ? 'causa' : 'causa falta', registro.causa || 'Sin causa');
   if (registro.mensaje && registro.mensaje !== registro.causa) causa.title = `Mensaje: ${registro.mensaje}`;
 
+  let nodo;
   if (enDiario) {
-    const nodo = el('article', 'registro',
+    nodo = el('article', 'registro',
       el('time', 'hora', formatoHora.format(fecha)),
       el('div', 'cuerpo', el('div', 'chips', ...chips), causa),
-      borrar);
+      acciones);
     const primera = registro.emociones.map(info).find(Boolean);
     nodo.style.setProperty('--color', primera ? categoria(primera.categoria).colores.centro : 'var(--borde)');
-    return nodo;
+  } else {
+    const cuando = `${formatoCorto.format(fecha)} · ${formatoHora.format(fecha)}`;
+    nodo = el('article', 'registro',
+      el('div', 'meta', el('time', null, cuando), acciones),
+      el('div', 'chips', ...chips),
+      causa);
   }
-  const cuando = `${formatoCorto.format(fecha)} · ${formatoHora.format(fecha)}`;
-  return el('article', 'registro',
-    el('div', 'meta', el('time', null, cuando), borrar),
-    el('div', 'chips', ...chips),
-    causa);
+  if (editable) {
+    nodo.classList.add('editable');
+    nodo.addEventListener('click', (e) => {
+      if (!e.target.closest('.borrar')) abrirEditorRegistro(registro, e.target.closest('[data-fila]')?.dataset.fila);
+    });
+  }
+  return nodo;
 }
 
 function dibujarTablero(registros) {
@@ -357,12 +378,13 @@ function dibujarDiario(registros) {
 }
 
 async function borrarRegistro(id) {
-  if (!window.confirm('¿Borrar este registro? No se puede deshacer.')) return;
+  if (!window.confirm('¿Borrar este registro? No se puede deshacer.')) return false;
   const respuesta = await fetch(`/api/registros/${id}`, { method: 'DELETE' });
   if (respuesta.ok) {
     estado.firma = '';
     await cargarRegistros();
   }
+  return respuesta.ok;
 }
 
 // --- Estado y eventos -------------------------------------------------------------------
@@ -385,6 +407,7 @@ function dibujar() {
   const registros = visibles();
   const vacio = registros.length === 0;
   $('#vacio').hidden = !vacio || Boolean(filtro);
+  $('#nota-editar').hidden = vacio || !puedeEditar();
   for (const p of document.querySelectorAll('#vacio .solo-propio')) p.hidden = Boolean(estado.diario);
   $('#tablero').hidden = estado.vista !== 'categorias' || (vacio && !filtro);
   $('#diario').hidden = estado.vista !== 'diario' || vacio;
@@ -818,72 +841,126 @@ function iniciarPanelEmocion() {
   });
 }
 
-// --- Corregir una emoción de un registro (tocando la emoción en «Tus registros») -------------------
+// --- Editar un registro (tocándolo en «Tus registros») ---------------------------------------------
 
-let filaEditada = null;
+let registroEditado = null;
 
-function chipEditable(fila) {
-  const nodo = el('button', 'chip-boton', chip(fila));
-  nodo.type = 'button';
-  nodo.title = 'Tocar para corregir';
-  nodo.addEventListener('click', () => abrirEditorFila(fila));
+function avisarRegistro(texto) {
+  $('#aviso-registro').textContent = texto;
+  $('#aviso-registro').hidden = !texto;
+}
+
+// Una emoción en el editor: dónde va en la rueda y, si la cambias, si el bot debe recordar esa palabra.
+function emocionEditable({ id = null, palabra, emocion = null }) {
+  const nueva = id === null;
+  const selector = el('select');
+  llenarSelectorEmociones(selector);
+  selector.options[0].disabled = Boolean(emocion);
+  selector.value = emocion || '';
+  selector.setAttribute('aria-label', nueva ? 'Emoción nueva' : `Dónde va «${palabra}»`);
+  const quitar = el('button', 'quitar', 'Quitar');
+  quitar.type = 'button';
+  quitar.setAttribute('aria-label', nueva ? 'Quitar esta emoción' : `Quitar «${palabra}» de este registro`);
+  const aprender = el('input');
+  aprender.type = 'checkbox';
+  const casilla = el('label', 'casilla', aprender,
+    el('span', null, `Recordar para la próxima: cuando escriba «${palabra.trim().toLowerCase()}», va aquí`));
+  casilla.hidden = true;
+  const nodo = el('li', 'fila-emocion', el('span', nueva ? 'palabra nueva' : 'palabra', nueva ? 'Nueva' : `«${palabra}»`),
+    selector, quitar, casilla);
+  if (!nueva) nodo.dataset.fila = id;
+
+  const antes = estado.rueda.emociones[emocion];
+  selector.addEventListener('change', () => {
+    const estabaOculta = casilla.hidden;
+    casilla.hidden = nueva || selector.value === (emocion || '');
+    // Al aparecer: si escribiste el nombre de la emoción, por defecto no cambia lo que esa palabra significa.
+    if (estabaOculta && !casilla.hidden) {
+      aprender.checked = !(antes && normalizar(palabra).startsWith(normalizar(antes.nombre).slice(0, -1)));
+    }
+  });
+  quitar.addEventListener('click', () => {
+    nodo.remove();
+    mostrarSinEmociones();
+  });
   return nodo;
 }
 
-function avisarFila(texto) {
-  $('#aviso-fila').textContent = texto;
-  $('#aviso-fila').hidden = !texto;
+function mostrarSinEmociones() {
+  const lista = $('#emociones-registro');
+  lista.querySelector('.sin-datos-texto')?.remove();
+  if (!lista.querySelector('.fila-emocion')) lista.append(el('li', 'sin-datos-texto', 'Ninguna todavía: agrega una aquí abajo.'));
 }
 
-function abrirEditorFila(fila) {
-  filaEditada = fila;
-  llenarSelectorEmociones($('#emocion-fila'));
-  const datos = info(fila);
-  const palabra = normalizar(fila.palabra);
-  $('#texto-fila').textContent = datos
-    ? `Escribiste «${fila.palabra}» y hoy está en ${datos.camino.join(' › ')}.`
-    : `Escribiste «${fila.palabra}» y todavía no está en la rueda.`;
-  $('#emocion-fila').value = fila.emocion || '';
-  // Si escribiste el nombre de la emoción, corregir este registro no debería cambiar lo que esa palabra significa.
-  $('#aprender-fila').checked = !(datos && palabra.startsWith(normalizar(datos.nombre).slice(0, -1)));
-  $('#texto-aprender').textContent = `Recordar para la próxima: cuando escriba «${fila.palabra.trim().toLowerCase()}», va aquí`;
-  avisarFila('');
-  $('#dialogo-fila').showModal();
+function abrirEditorRegistro(registro, filaTocada) {
+  registroEditado = registro;
+  const fecha = new Date(registro.creado_en * 1000);
+  $('#fecha-registro').textContent = `${formatoDia.format(fecha)} · ${formatoHora.format(fecha)}`;
+  const mensaje = registro.mensaje && registro.mensaje !== registro.causa ? registro.mensaje : '';
+  $('#mensaje-registro').textContent = mensaje ? `Le escribiste al bot: «${mensaje}»` : '';
+  $('#mensaje-registro').hidden = !mensaje;
+  $('#causa-registro').value = registro.causa || '';
+  $('#emociones-registro').replaceChildren(...registro.emociones.map(emocionEditable));
+  mostrarSinEmociones();
+  llenarSelectorEmociones($('#agregar-emocion'));
+  $('#agregar-emocion').options[0].textContent = 'Elige una en la rueda…';
+  $('#agregar-emocion').value = '';
+  avisarRegistro('');
+  $('#dialogo-registro').showModal();
+  // Si tocaste una emoción, el foco va a ella; si no, al título (en el celular, el texto abriría el teclado).
+  const tocada = filaTocada && $('#emociones-registro').querySelector(`[data-fila="${filaTocada}"] select`);
+  (tocada || $('#titulo-registro')).focus();
 }
 
-async function recargarDespuesDeCorregir() {
-  $('#dialogo-fila').close();
-  estado.palabras = null; // puede haber aprendido una palabra
+async function guardarRegistro() {
+  const emociones = [...$('#emociones-registro').querySelectorAll('.fila-emocion')].map((nodo) => {
+    const emocion = nodo.querySelector('select').value || null;
+    if (!nodo.dataset.fila) return { emocion };
+    const casilla = nodo.querySelector('.casilla');
+    return { id: Number(nodo.dataset.fila), emocion, aprender: !casilla.hidden && casilla.querySelector('input').checked };
+  });
+  const respuesta = await fetch(`/api/registros/${registroEditado.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ causa: $('#causa-registro').value, emociones }),
+  }).catch(() => null);
+  if (!respuesta?.ok) {
+    avisarRegistro('No pude guardarlo. Intenta de nuevo en un momento.');
+    return;
+  }
+  $('#dialogo-registro').close();
+  if (emociones.some((e) => e.aprender)) estado.palabras = null; // el bot aprendió una palabra
   estado.firma = '';
   await cargarRegistros();
 }
 
-function iniciarEditorFila() {
-  $('#form-fila').addEventListener('submit', async (e) => {
+function iniciarEditorRegistro() {
+  $('#form-registro').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const emocion = $('#emocion-fila').value;
-    if (!emocion) {
-      avisarFila('Elige dónde va en la rueda.');
+    const boton = e.submitter || $('#form-registro [type=submit]');
+    boton.disabled = true;
+    try {
+      await guardarRegistro();
+    } finally {
+      boton.disabled = false;
+    }
+  });
+  $('#agregar-emocion').addEventListener('change', (e) => {
+    const emocion = e.target.value;
+    if (!emocion) return;
+    e.target.value = '';
+    const repetida = [...$('#emociones-registro').querySelectorAll('.fila-emocion select')].find((s) => s.value === emocion);
+    if (repetida) { // ya está en el registro
+      repetida.focus();
       return;
     }
-    const respuesta = await fetch(`/api/filas/${filaEditada.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ emocion, aprender: $('#aprender-fila').checked }),
-    });
-    if (!respuesta.ok) {
-      avisarFila('No pude guardarlo. Intenta de nuevo en un momento.');
-      return;
-    }
-    await recargarDespuesDeCorregir();
+    $('#emociones-registro').append(emocionEditable({ palabra: estado.rueda.emociones[emocion].nombre, emocion }));
+    mostrarSinEmociones();
   });
-  $('#quitar-fila').addEventListener('click', async () => {
-    if (!window.confirm(`¿Quitar «${filaEditada.palabra}» de este registro?`)) return;
-    const respuesta = await fetch(`/api/filas/${filaEditada.id}`, { method: 'DELETE' });
-    if (respuesta.ok) await recargarDespuesDeCorregir();
-    else avisarFila('No pude quitarla. Intenta de nuevo en un momento.');
+  $('#borrar-registro').addEventListener('click', async () => {
+    if (await borrarRegistro(registroEditado.id)) $('#dialogo-registro').close();
   });
-  $('#cancelar-fila').addEventListener('click', () => $('#dialogo-fila').close());
+  $('#cancelar-registro').addEventListener('click', () => $('#dialogo-registro').close());
 }
 
 // --- Menú lateral y secciones (#/diario, #/compartido/<id>, #/palabras, #/compartir, #/telegram) ---
@@ -1005,7 +1082,7 @@ async function iniciar() {
   if (servidor.cuenta) {
     iniciarPalabras();
     iniciarPanelEmocion();
-    iniciarEditorFila();
+    iniciarEditorRegistro();
   }
   estado.rueda = await (await fetch('/api/rueda')).json();
   dibujarRueda();

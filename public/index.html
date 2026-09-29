@@ -150,6 +150,7 @@
                 <button type="button" data-vista="diario">Diario</button>
               </div>
             </div>
+            <p class="nota-registros" id="nota-editar" hidden>Toca un registro para editarlo.</p>
             <div class="tablero" id="tablero"></div>
             <div class="diario" id="diario" hidden></div>
             <div class="vacio" id="vacio" hidden>
@@ -255,18 +256,22 @@
     </div>
   </div>
 
-  <dialog class="dialogo" id="dialogo-fila" aria-labelledby="titulo-fila">
-    <form class="form-palabra" id="form-fila" method="dialog">
-      <h2 id="titulo-fila">Corregir emoción</h2>
-      <p class="explicacion" id="texto-fila"></p>
-      <label for="emocion-fila">Va en</label>
-      <select id="emocion-fila" required></select>
-      <label class="casilla"><input type="checkbox" id="aprender-fila"> <span id="texto-aprender"></span></label>
-      <p class="aviso-acceso" id="aviso-fila" role="status" hidden></p>
+  <dialog class="dialogo" id="dialogo-registro" aria-labelledby="titulo-registro">
+    <form class="form-palabra" id="form-registro" method="dialog">
+      <h2 id="titulo-registro" tabindex="-1" autofocus>Editar registro</h2>
+      <p class="fecha-registro" id="fecha-registro"></p>
+      <p class="mensaje-registro" id="mensaje-registro" hidden></p>
+      <label for="causa-registro">Qué pasó</label>
+      <textarea id="causa-registro" rows="3" maxlength="4096" placeholder="Qué causó lo que sentiste"></textarea>
+      <span class="etiqueta" id="etiqueta-emociones">Lo que sentiste</span>
+      <ul class="emociones-editables" id="emociones-registro" aria-labelledby="etiqueta-emociones"></ul>
+      <label for="agregar-emocion">Agregar otra emoción</label>
+      <select id="agregar-emocion"></select>
+      <p class="aviso-acceso" id="aviso-registro" role="status" hidden></p>
       <div class="botones">
         <button type="submit" class="boton">Guardar</button>
-        <button type="button" class="boton secundario" id="cancelar-fila">Cancelar</button>
-        <button type="button" class="boton peligro" id="quitar-fila">Quitar del registro</button>
+        <button type="button" class="boton secundario" id="cancelar-registro">Cancelar</button>
+        <button type="button" class="boton peligro" id="borrar-registro">Borrar registro</button>
       </div>
     </form>
   </dialog>

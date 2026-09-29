@@ -80,7 +80,7 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
   cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--texto-suave); white-space: nowrap;
 }
 .segmentado button[aria-pressed="true"] { background: var(--tarjeta); color: var(--texto); box-shadow: var(--sombra); }
-.segmentado button:focus-visible, .seg:focus-visible, .borrar:focus-visible, .filtro button:focus-visible {
+.segmentado button:focus-visible, .seg:focus-visible, .borrar:focus-visible, .editar:focus-visible, .filtro button:focus-visible {
   outline: 2px solid var(--texto); outline-offset: 2px;
 }
 
@@ -104,15 +104,21 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 }
 .cerrar:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
 .incluidas { margin: 0; color: var(--texto-suave); font-size: 0.85rem; overflow-wrap: anywhere; }
-.chip-boton { border: 0; padding: 0; background: none; border-radius: 999px; font: inherit; cursor: pointer; }
-.chip-boton:hover .chip { box-shadow: 0 0 0 2px var(--texto-suave); }
-.chip-boton:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
 .dialogo {
   width: min(480px, calc(100vw - 32px)); padding: 22px; border: 1px solid var(--borde); border-radius: 16px;
   background: var(--tarjeta); color: var(--texto); box-shadow: 0 20px 60px rgb(0 0 0 / 30%);
 }
 .dialogo::backdrop { background: rgb(0 0 0 / 40%); }
-.dialogo h2 { margin-bottom: 6px; }
+.dialogo h2 { margin-bottom: 0; }
+.dialogo h2:focus { outline: none; }
+.fecha-registro { margin: -6px 0 0; color: var(--texto-suave); font-size: 0.88rem; }
+.mensaje-registro { margin: 0; color: var(--texto-suave); font-size: 0.85rem; overflow-wrap: anywhere; }
+.form-palabra .etiqueta { font-weight: 600; font-size: 0.88rem; margin-top: 4px; }
+.emociones-editables { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.fila-emocion { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.fila-emocion .palabra { font-weight: 700; max-width: 8.5rem; overflow-wrap: anywhere; }
+.fila-emocion .palabra.nueva { color: var(--texto-suave); font-weight: 600; }
+.fila-emocion .casilla { grid-column: 1 / -1; font-size: 0.85rem; }
 .form-palabra .casilla { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; color: var(--texto-suave); }
 .form-palabra .botones { margin-top: 6px; }
 
@@ -203,12 +209,17 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .registro .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .registro .causa { margin: 0; overflow-wrap: anywhere; }
 .registro .causa.falta { color: var(--texto-suave); font-style: italic; }
-.borrar {
+.acciones-registro { display: flex; align-items: center; gap: 2px; }
+.borrar, .editar {
   border: 0; background: transparent; color: var(--texto-suave); cursor: pointer; width: 26px; height: 26px;
   border-radius: 50%; font-size: 1rem; line-height: 1; opacity: 0.5;
 }
-.registro:hover .borrar, .borrar:focus-visible { opacity: 1; }
+.registro:hover .borrar, .registro:hover .editar, .borrar:focus-visible, .editar:focus-visible { opacity: 1; }
 .borrar:hover { background: var(--pista); color: #d4382b; }
+.editar:hover { background: var(--pista); color: var(--texto); }
+.registro.editable { cursor: pointer; transition: background 0.15s; }
+.registro.editable:hover { background: var(--fondo); }
+.nota-registros { margin: -4px 0 12px; color: var(--texto-suave); font-size: 0.85rem; }
 
 .diario { display: grid; gap: 18px; }
 .dia h3 { margin: 0 0 8px; }
@@ -348,11 +359,14 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .accesos .correo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
 .form-palabra { display: grid; gap: 8px; }
 .form-palabra label { font-weight: 600; font-size: 0.88rem; }
-.form-palabra input, .form-palabra select {
+.form-palabra input, .form-palabra select, .form-palabra textarea {
   min-width: 0; padding: 9px 12px; border-radius: 10px; font: inherit;
   border: 1px solid var(--borde); background: var(--fondo); color: var(--texto);
 }
-.form-palabra input:focus-visible, .form-palabra select:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
+.form-palabra input:focus-visible, .form-palabra select:focus-visible, .form-palabra textarea:focus-visible {
+  outline: 2px solid var(--texto); outline-offset: 1px;
+}
+.form-palabra textarea { resize: vertical; min-height: 4.6em; line-height: 1.45; }
 .form-palabra .boton { justify-self: start; margin-top: 4px; }
 .nota-palabras { margin: 14px 0 0; font-size: 0.84rem; }
 .lista-palabras { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
@@ -370,11 +384,12 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
   cursor: pointer; padding: 2px 6px; border-radius: 6px;
 }
 .enlace:hover { background: var(--tarjeta); }
-.accesos .quitar, .lista-palabras .quitar {
+.accesos .quitar, .lista-palabras .quitar, .fila-emocion .quitar {
   border: 0; background: transparent; color: #d4382b; font-weight: 700; font-size: 0.85rem;
   cursor: pointer; padding: 2px 4px; border-radius: 6px;
 }
 .accesos .quitar:hover, .lista-palabras .quitar:hover { background: var(--tarjeta); }
+.fila-emocion .quitar:hover { background: var(--pista); }
 
 .acceso { max-width: 640px; margin: 0 auto; padding: 28px 16px 48px; }
 .acceso-marca { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }

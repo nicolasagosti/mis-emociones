@@ -7,10 +7,11 @@ Rutas:
     GET    /api/estado                 qué está configurado y quién entró (sin datos del diario)
     GET    /api/rueda                  la rueda de los sentimientos (público)
     GET    /api/registros[?diario=id]  tu diario, o uno que te compartieron
+    PATCH  /api/registros/<id>         editar un registro de tu diario: {"causa": "…", "emociones": [
+                                       {"id": 7, "emocion": "<id>", "aprender": true}, {"emocion": "<id>"}]}
+                                       (las emociones que no se mandan se quitan; las que no tienen id
+                                       se agregan; con «aprender», el bot recuerda esa palabra)
     DELETE /api/registros/<id>         borrar un registro de tu diario
-    PATCH  /api/filas/<id>             corregir una emoción de un registro tuyo:
-                                       {"emocion": "<id>", "aprender": true} (el bot recuerda la palabra)
-    DELETE /api/filas/<id>             quitar esa emoción del registro
     GET    /api/accesos                con quién compartiste tu diario
     POST   /api/accesos                compartirlo con un correo de Google: {"correo": "…"}
     DELETE /api/accesos/<correo>       dejar de compartirlo
@@ -59,6 +60,9 @@ SEGURIDAD = {
     "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
 }
 MAX_AVISO = 1_000_000  # bytes aceptados en un aviso de Telegram
+MAX_JSON = 32_000  # bytes aceptados en un pedido del panel
+MAX_CAUSA = 4096  # caracteres, como un mensaje de Telegram
+MAX_EMOCIONES = 20  # por registro
 CORREO = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
 
 # Lo que esta instancia ya le preguntó a Telegram (en Vercel, una vez por instancia).
@@ -147,7 +151,7 @@ class Panel(BaseHTTPRequestHandler):
 
     def _patch(self) -> None:
         partes = urlsplit(self.path).path.strip("/").split("/")
-        if len(partes) != 3 or partes[:2] != ["api", "filas"]:
+        if len(partes) != 3 or partes[:2] != ["api", "registros"]:
             self._error(404)
             return
         if not self._mismo_origen():
@@ -156,15 +160,15 @@ class Panel(BaseHTTPRequestHandler):
         if atendible is None:
             return
         bd, usuario = atendible
-        fila = self._fila_propia(bd, usuario, partes[2])
-        if fila is None:
+        registro = self._registro_propio(bd, usuario, partes[2])
+        if registro is None:
             self._error(404)
             return
-        self._corregir_fila(bd, usuario, fila)
+        self._editar_registro(bd, usuario, registro)
 
     def _delete(self) -> None:
         partes = urlsplit(self.path).path.strip("/").split("/")
-        if len(partes) != 3 or partes[0] != "api" or partes[1] not in ("registros", "filas", "accesos", "palabras"):
+        if len(partes) != 3 or partes[0] != "api" or partes[1] not in ("registros", "accesos", "palabras"):
             self._error(404)
             return
         if not self._mismo_origen():
@@ -173,15 +177,9 @@ class Panel(BaseHTTPRequestHandler):
         if atendible is None:
             return
         bd, usuario = atendible
-        if partes[1] == "filas":
-            fila = self._fila_propia(bd, usuario, partes[2])
-            borrado = fila is not None
-            if borrado:
-                bd.borrar_fila(fila["id"])
-        elif partes[1] == "registros":
-            registro = bd.obtener_registro(int(partes[2])) if partes[2].isdigit() else None
-            # Solo se borra de tu propio diario.
-            borrado = registro is not None and registro["usuario_id"] == usuario["id"]
+        if partes[1] == "registros":
+            registro = self._registro_propio(bd, usuario, partes[2])
+            borrado = registro is not None
             if borrado:
                 bd.borrar_registro(registro["id"])
         elif partes[1] == "palabras":
@@ -223,7 +221,7 @@ class Panel(BaseHTTPRequestHandler):
             self._error(415)
             return None
         try:
-            datos = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 10_000)))
+            datos = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), MAX_JSON)))
         except ValueError:
             datos = None
         if not isinstance(datos, dict):
@@ -244,26 +242,24 @@ class Panel(BaseHTTPRequestHandler):
             log.info("La cuenta %s compartió su diario con %s", usuario["id"], correo)
         self._json({"accesos": bd.compartidos_de(usuario["id"])})
 
-    def _fila_propia(self, bd: BaseDeDatos, usuario: dict, texto_id: str) -> dict | None:
-        """Una emoción de un registro, solo si el registro es de tu diario."""
-        fila = bd.obtener_fila(int(texto_id)) if texto_id.isdigit() else None
-        registro = bd.obtener_registro(fila["registro_id"]) if fila else None
-        return fila if registro is not None and registro["usuario_id"] == usuario["id"] else None
+    def _registro_propio(self, bd: BaseDeDatos, usuario: dict, texto_id: str) -> dict | None:
+        """Un registro, solo si es de tu diario (los compartidos contigo son de solo lectura)."""
+        registro = bd.obtener_registro(int(texto_id)) if texto_id.isdigit() else None
+        return registro if registro is not None and registro["usuario_id"] == usuario["id"] else None
 
-    def _corregir_fila(self, bd: BaseDeDatos, usuario: dict, fila: dict) -> None:
-        """Cambia dónde va una emoción de tu registro; con «aprender», el bot recuerda esa palabra."""
+    def _editar_registro(self, bd: BaseDeDatos, usuario: dict, registro: dict) -> None:
         datos = self._leer_json()
         if datos is None:
             return
-        emocion = str(datos.get("emocion", ""))
-        if emocion not in rueda.EMOCIONES:
+        edicion = _edicion(registro, datos)
+        if edicion is None:
             self._error(400)
             return
-        bd.clasificar(fila["id"], emocion)
-        palabra = rueda.palabra_valida(fila["palabra"])
-        if datos.get("aprender") is True and palabra:
+        causa, quedan, nuevas, aprender = edicion
+        bd.editar_registro(registro["id"], causa, quedan, nuevas)
+        for palabra, emocion in aprender:
             bd.aprender(usuario["id"], palabra, emocion)
-        self._json({"registro": bd.obtener_registro(fila["registro_id"])})
+        self._json({"registro": bd.obtener_registro(registro["id"])})
 
     def _palabras(self, bd: BaseDeDatos, usuario: dict) -> None:
         vocabulario = bd.vocabulario(usuario["id"])
@@ -560,6 +556,40 @@ class Panel(BaseHTTPRequestHandler):
 
     def log_message(self, formato: str, *args) -> None:
         log.debug(formato, *args)
+
+
+def _edicion(registro: dict, datos: dict) -> tuple | None:
+    """Valida lo que manda el editor del panel para un registro. Devuelve (causa, quedan, nuevas,
+    aprender): las filas que siguen con su emoción nueva (o None si no cambia), las emociones que
+    se agregan y las palabras que el bot debe recordar, como (palabra, emoción). None si no es válido."""
+    causa = datos.get("causa", registro["causa"])
+    if causa is not None and (not isinstance(causa, str) or len(causa) > MAX_CAUSA):
+        return None
+    filas = {fila["id"]: fila for fila in registro["emociones"]}
+    pedidas = datos.get("emociones", [{"id": fila_id} for fila_id in filas])
+    if not isinstance(pedidas, list) or len(pedidas) > MAX_EMOCIONES:
+        return None
+    quedan: dict[int, str | None] = {}
+    nuevas: list[tuple[str, str]] = []
+    aprender: list[tuple[str, str]] = []
+    for pedida in pedidas:
+        if not isinstance(pedida, dict):
+            return None
+        emocion, fila_id = pedida.get("emocion"), pedida.get("id")
+        if emocion is not None and not (isinstance(emocion, str) and emocion in rueda.EMOCIONES):
+            return None
+        if fila_id is None:  # una emoción nueva, elegida en la rueda
+            if emocion is None:
+                return None
+            nuevas.append((rueda.EMOCIONES[emocion].nombre, emocion))
+            continue
+        if type(fila_id) is not int or fila_id not in filas or fila_id in quedan:
+            return None
+        quedan[fila_id] = emocion
+        palabra = rueda.palabra_valida(filas[fila_id]["palabra"])
+        if pedida.get("aprender") is True and palabra and emocion not in (None, filas[fila_id]["emocion"]):
+            aprender.append((palabra, emocion))
+    return (causa.strip() or None) if causa else None, quedan, nuevas, aprender
 
 
 def manejador(config: Configuracion) -> type[Panel]:

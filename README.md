@@ -135,8 +135,9 @@ Lo que definas vale también en femenino y en plural, y reemplaza a los sinónim
 (por ejemplo, puedes hacer que para ti «rabia» sea Molesto en lugar de Furioso).
 
 En la app también puedes tocar una emoción de la rueda para ver las palabras que la nombran y
-agregarle o quitarle las tuyas, o tocar una emoción en **Tus registros** para moverla a otro lugar
-de la rueda o quitarla de ese registro (y, si quieres, que el bot recuerde esa palabra para la próxima).
+agregarle o quitarle las tuyas, o tocar un registro en **Tus registros** para editarlo: cambiar lo
+que pasó, mover una emoción a otro lugar de la rueda (y, si quieres, que el bot recuerde esa palabra
+para la próxima), quitarla o agregar otras.
 
 ## El panel
 
@@ -146,7 +147,7 @@ de la rueda o quitarla de ese registro (y, si quieres, que el bot recuerde esa p
 - **Tus registros** en columnas por categoría o como diario cronológico.
 - Toca una emoción o una categoría (en la rueda o en las barras) para filtrar tus registros;
   en la rueda, además, se abre un panel con sus palabras.
-- Toca una emoción de un registro para corregirla si el bot la ubicó mal.
+- Toca un registro para editarlo: lo que pasó y sus emociones.
 - Se actualiza solo cuando llegan mensajes nuevos.
 
 ## Tus datos

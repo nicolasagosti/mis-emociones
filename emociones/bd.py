@@ -268,6 +268,24 @@ class BaseDeDatos:
         with self._conexion() as con:
             con.execute("DELETE FROM registro_emociones WHERE id = ?", (fila_id,))
 
+    def editar_registro(self, registro_id: int, causa: str | None, quedan: dict[int, str | None],
+                        nuevas: list[tuple[str, str]]) -> None:
+        """Cambia todo el registro de una vez: su causa; las filas de `quedan` siguen (con su emoción
+        nueva, o igual si es None) y las demás se quitan; y se agregan las `nuevas` [(palabra, emoción)]."""
+        with self._conexion() as con:
+            con.execute("UPDATE registros SET causa = ? WHERE id = ?", (causa, registro_id))
+            for fila in con.execute("SELECT id FROM registro_emociones WHERE registro_id = ?",
+                                    (registro_id,)).fetchall():
+                if fila["id"] not in quedan:
+                    con.execute("DELETE FROM registro_emociones WHERE id = ?", (fila["id"],))
+            for fila_id, emocion in quedan.items():
+                if emocion is not None:
+                    con.execute("UPDATE registro_emociones SET emocion = ? WHERE id = ? AND registro_id = ?",
+                                (emocion, fila_id, registro_id))
+            for palabra, emocion in nuevas:
+                con.execute("INSERT INTO registro_emociones (registro_id, palabra, emocion) VALUES (?, ?, ?)",
+                            (registro_id, palabra, emocion))
+
     def poner_causa(self, registro_id: int, causa: str) -> None:
         with self._conexion() as con:
             con.execute("UPDATE registros SET causa = ? WHERE id = ?", (causa, registro_id))
