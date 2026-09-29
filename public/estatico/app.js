@@ -13,6 +13,7 @@ const estado = {
   resaltar: leer('resaltar', '1') === '1',
   filtro: null, // { tipo: 'categoria' | 'emocion', id, nombre }
   refresco: null,
+  rol: 'dueno', // 'dueno' o 'lectura' (con quien compartiste el panel)
 };
 
 // --- Utilidades ------------------------------------------------------------------
@@ -273,11 +274,14 @@ function visibles() {
 
 function tarjeta(registro, { enDiario = false } = {}) {
   const fecha = new Date(registro.creado_en * 1000);
-  const borrar = el('button', 'borrar', '×');
-  borrar.type = 'button';
-  borrar.title = 'Borrar registro';
-  borrar.setAttribute('aria-label', 'Borrar registro');
-  borrar.addEventListener('click', () => borrarRegistro(registro.id));
+  let borrar = null; // quien solo tiene acceso de lectura no puede borrar
+  if (estado.rol === 'dueno') {
+    borrar = el('button', 'borrar', '×');
+    borrar.type = 'button';
+    borrar.title = 'Borrar registro';
+    borrar.setAttribute('aria-label', 'Borrar registro');
+    borrar.addEventListener('click', () => borrarRegistro(registro.id));
+  }
 
   const chips = registro.emociones.length
     ? registro.emociones.map(chip)
@@ -458,6 +462,7 @@ function mostrarAcceso(servidor) {
   $('#contenido').hidden = true;
   $('#periodos').hidden = true;
   $('#salir').hidden = true;
+  $('#cuenta').hidden = true;
   $('#acceso').hidden = false;
   $('#entrar-google').hidden = !servidor.google;
   $('#acceso-telegram').hidden = servidor.google;
@@ -476,15 +481,80 @@ function mostrarAcceso(servidor) {
     el('div', null, el('strong', null, titulo), listo ? null : el('span', null, ayuda)))));
 }
 
+// --- Compartir el panel (solo el dueño) ----------------------------------------------------
+
+async function pedirAccesos(opciones) {
+  const respuesta = await fetch('/api/accesos', opciones);
+  if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
+  return (await respuesta.json()).accesos;
+}
+
+function dibujarAccesos(accesos) {
+  const lista = $('#accesos');
+  if (!accesos.length) {
+    lista.replaceChildren(el('li', 'sin-datos-texto', 'Todavía no lo compartiste con nadie.'));
+    return;
+  }
+  lista.replaceChildren(...accesos.map(({ correo }) => {
+    const quitar = el('button', 'quitar', 'Quitar');
+    quitar.type = 'button';
+    quitar.setAttribute('aria-label', `Quitarle el acceso a ${correo}`);
+    quitar.addEventListener('click', () => quitarAcceso(correo));
+    return el('li', null, el('span', 'correo', correo), quitar);
+  }));
+}
+
+function avisarAcceso(texto) {
+  $('#aviso-acceso').textContent = texto;
+  $('#aviso-acceso').hidden = !texto;
+}
+
+async function quitarAcceso(correo) {
+  if (!window.confirm(`¿Quitarle el acceso a ${correo}? Dejará de ver tu panel en el acto.`)) return;
+  const respuesta = await fetch(`/api/accesos/${encodeURIComponent(correo)}`, { method: 'DELETE' });
+  if (respuesta.ok) {
+    avisarAcceso(`${correo} ya no puede ver tu panel.`);
+    dibujarAccesos(await pedirAccesos());
+  }
+}
+
+function iniciarCompartir(url) {
+  $('#compartir').hidden = false;
+  $('#enlace-panel').textContent = url.replace(/^https?:\/\//, '');
+  $('#form-acceso').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const campo = $('#correo-acceso');
+    const correo = campo.value.trim().toLowerCase();
+    try {
+      dibujarAccesos(await pedirAccesos({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ correo }),
+      }));
+      avisarAcceso(`Listo: ${correo} ya puede entrar. Envíale el enlace del panel.`);
+      campo.value = '';
+    } catch {
+      avisarAcceso('No pude darle acceso: revisa que el correo esté bien escrito.');
+    }
+  });
+  pedirAccesos().then(dibujarAccesos).catch(() => avisarAcceso('No pude cargar con quién compartiste el panel.'));
+}
+
 async function iniciar() {
   const servidor = await (await fetch('/api/estado')).json();
   if (servidor.requiere_sesion && !servidor.sesion) {
     mostrarAcceso(servidor);
     return;
   }
+  estado.rol = servidor.rol;
   $('#contenido').hidden = false;
   $('#periodos').hidden = false;
   $('#salir').hidden = !servidor.requiere_sesion;
+  if (servidor.cuenta) {
+    $('#cuenta').hidden = false;
+    $('#cuenta').textContent = servidor.rol === 'lectura' ? `Solo lectura · ${servidor.cuenta}` : servidor.cuenta;
+  }
+  if (servidor.requiere_sesion && servidor.rol === 'dueno') iniciarCompartir(servidor.url);
   estado.rueda = await (await fetch('/api/rueda')).json();
   dibujarRueda();
   conectarRueda();

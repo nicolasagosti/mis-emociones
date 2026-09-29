@@ -4,7 +4,10 @@ Rutas:
     GET    /api/estado          qué está configurado y si hay sesión (público, sin datos personales)
     GET    /api/rueda           la rueda de los sentimientos (público)
     GET    /api/registros       tus registros (requiere sesión fuera de tu computadora)
-    DELETE /api/registros/<id>  borrar un registro (ídem)
+    DELETE /api/registros/<id>  borrar un registro (solo el dueño)
+    GET    /api/accesos         con quién compartiste el panel (solo el dueño)
+    POST   /api/accesos         compartir con un correo de Google: {"correo": "…"} (solo el dueño)
+    DELETE /api/accesos/<correo>  dejar de compartir (solo el dueño)
     POST   /api/telegram        webhook del bot (solo Telegram, con su clave secreta)
     GET    /auth/google         lleva a Google para elegir la cuenta
     GET    /auth/google/callback  Google vuelve aquí: si el correo está autorizado, abre la sesión
@@ -18,9 +21,11 @@ import hmac
 import html
 import json
 import logging
+import re
+import time
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import google, rueda, sesion
 from .bd import BaseDeDatos
@@ -43,6 +48,10 @@ SEGURIDAD = {
     "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
 }
 MAX_AVISO = 1_000_000  # bytes aceptados en un aviso de Telegram
+CORREO = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
+
+# Roles: el dueño ve y modifica todo; con quien compartes el panel solo puede verlo.
+DUENO, LECTURA = "dueno", "lectura"
 
 # Webhooks que esta instancia ya registró en Telegram (en Vercel, una vez por instancia).
 _webhooks_conectados: set[str] = set()
@@ -77,10 +86,14 @@ class Panel(BaseHTTPRequestHandler):
         elif url.path == "/api/rueda":
             self._json(rueda.como_json())
         elif url.path == "/api/registros":
-            bd = self._bd_autorizada()
+            bd = self._bd_para(LECTURA)
             if bd:
                 desde = consulta.get("desde", [""])[0]
                 self._json({"registros": bd.listar_registros(desde=int(desde) if desde.isdigit() else None)})
+        elif url.path == "/api/accesos":
+            bd = self._bd_para(DUENO)
+            if bd:
+                self._json({"accesos": bd.accesos()})
         elif url.path == "/auth/google":
             self._google_ida()
         elif url.path == "/auth/google/callback":
@@ -97,36 +110,72 @@ class Panel(BaseHTTPRequestHandler):
             self._error(404)
 
     def _post(self) -> None:
-        if urlsplit(self.path).path == "/api/telegram":
+        ruta = urlsplit(self.path).path
+        if ruta == "/api/telegram":
             self._webhook()
+        elif ruta == "/api/accesos":
+            self._compartir()
         else:
             self._error(404)
 
     def _delete(self) -> None:
         partes = urlsplit(self.path).path.strip("/").split("/")
-        if len(partes) != 3 or partes[:2] != ["api", "registros"] or not partes[2].isdigit():
+        if len(partes) != 3 or partes[0] != "api" or partes[1] not in ("registros", "accesos"):
             self._error(404)
             return
-        bd = self._bd_autorizada()
+        if not self._mismo_origen():
+            return
+        bd = self._bd_para(DUENO)
         if bd is None:
             return
-        if bd.borrar_registro(int(partes[2])):
+        if partes[1] == "registros":
+            borrado = partes[2].isdigit() and bd.borrar_registro(int(partes[2]))
+        else:
+            borrado = bd.quitar_acceso(unquote(partes[2]).strip().lower())
+        if borrado:
             self._enviar(204, b"", "text/plain")
         else:
             self._error(404)
+
+    def _compartir(self) -> None:
+        if not self._mismo_origen():
+            return
+        bd = self._bd_para(DUENO)
+        if bd is None:
+            return
+        if not self.headers.get("Content-Type", "").startswith("application/json"):
+            self._error(415)
+            return
+        try:
+            datos = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 10_000)))
+            correo = str(datos.get("correo", "")).strip().lower()
+        except (ValueError, AttributeError):
+            self._error(400)
+            return
+        if not CORREO.match(correo) or len(correo) > 254:
+            self._error(400)
+            return
+        if correo not in self.config.google_correos:  # los dueños ya tienen acceso completo
+            bd.dar_acceso(correo, int(time.time()))
+            log.info("Panel compartido con %s", correo)
+        self._json({"accesos": bd.accesos()})
 
     # --- Sesión y configuración -------------------------------------------------------
 
     def _bd(self) -> BaseDeDatos | None:
         return BaseDeDatos(self.config.base_de_datos) if self.config.base_de_datos else None
 
-    def _bd_autorizada(self) -> BaseDeDatos | None:
-        """La base de datos, si quien pide puede ver los datos; si no, responde el error."""
+    def _bd_para(self, rol_necesario: str) -> BaseDeDatos | None:
+        """La base de datos, si la sesión alcanza para `rol_necesario`; si no, responde el error."""
         bd = self._bd()
         if bd is None:
             self._error(503)
-        elif self.config.requiere_sesion and self._sujeto(bd) is None:
+            return None
+        _, rol = self._sesion(bd)
+        if rol is None:
             self._error(401)
+        elif rol_necesario == DUENO and rol != DUENO:
+            self._error(403)
         else:
             return bd
         return None
@@ -139,18 +188,32 @@ class Panel(BaseHTTPRequestHandler):
             pass
         return cookies
 
-    def _sujeto(self, bd: BaseDeDatos) -> str | None:
-        """Quién tiene la sesión abierta («t:<id>» o «g:<correo>»), si todavía puede entrar."""
+    def _sesion(self, bd: BaseDeDatos | None) -> tuple[str | None, str | None]:
+        """(quién entró: «t:<id>» o «g:<correo>», su rol) según la cookie del navegador."""
+        if not self.config.requiere_sesion:
+            return None, DUENO  # en tu computadora no hace falta entrar
         cookie = self._cookies().get("sesion")
         sujeto = sesion.verificar(self.config.clave_sesion, "sesion", cookie.value if cookie else None)
-        return sujeto if self._puede_entrar(bd, sujeto) else None
+        rol = self._rol_de(bd, sujeto)
+        return (sujeto, rol) if rol else (None, None)
 
-    def _puede_entrar(self, bd: BaseDeDatos, sujeto: str | None) -> bool:
+    def _rol_de(self, bd: BaseDeDatos | None, sujeto: str | None) -> str | None:
+        """Se revisa en cada pedido: si le quitas el acceso a alguien, su sesión deja de valer."""
         tipo, _, valor = (sujeto or "").partition(":")
-        if tipo == "t" and valor.isdigit():
-            return es_dueno(bd, self.config.permitidos, int(valor))
-        if tipo == "g":
-            return valor in self.config.google_correos
+        if tipo == "t" and valor.isdigit() and bd is not None and es_dueno(bd, self.config.permitidos, int(valor)):
+            return DUENO
+        if tipo == "g" and valor in self.config.google_correos:
+            return DUENO
+        if tipo == "g" and bd is not None and bd.tiene_acceso(valor):
+            return LECTURA
+        return None
+
+    def _mismo_origen(self) -> bool:
+        """Los cambios solo se aceptan desde la propia página (defensa extra contra CSRF)."""
+        origen = self.headers.get("Origin")
+        if not self.config.requiere_sesion or not origen or origen.rstrip("/") == self.config.url_publica:
+            return True
+        self._error(403)
         return False
 
     def _estado(self) -> dict:
@@ -161,9 +224,14 @@ class Panel(BaseHTTPRequestHandler):
                 bd = BaseDeDatos(cfg.base_de_datos)
             except Exception:
                 log.exception("No pude conectar con la base de datos")
+        sujeto, rol = self._sesion(bd)
         return {
             "requiere_sesion": cfg.requiere_sesion,
-            "sesion": not cfg.requiere_sesion or (bd is not None and self._sujeto(bd) is not None),
+            "sesion": rol is not None,
+            "rol": rol,
+            # Con qué cuenta entró (se muestra en la cabecera del panel).
+            "cuenta": sujeto[2:] if sujeto and sujeto.startswith("g:") else ("Telegram" if sujeto else None),
+            "url": cfg.url_publica,
             "vercel": cfg.en_vercel,
             "base_de_datos": bd is not None,
             "google": cfg.google_listo,
@@ -200,7 +268,7 @@ class Panel(BaseHTTPRequestHandler):
         """El enlace de /panel: solo lo genera el bot, para el dueño."""
         bd = self._bd()
         sujeto = sesion.verificar(self.config.clave_sesion, "entrar", firma)
-        if bd is None or not (sujeto or "").startswith("t:") or not self._puede_entrar(bd, sujeto):
+        if not (sujeto or "").startswith("t:") or self._rol_de(bd, sujeto) != DUENO:
             self._pagina(403, "El enlace venció o no es válido",
                          "Pídele uno nuevo a tu bot de Telegram con el comando /panel.")
             return
@@ -240,7 +308,7 @@ class Panel(BaseHTTPRequestHandler):
             log.warning("No se pudo iniciar sesión con Google: %s", error)
             self._pagina(403, "No pude verificar tu cuenta de Google", "Vuelve a intentarlo en un momento.", borrar)
             return
-        if correo not in cfg.google_correos:
+        if self._rol_de(self._bd(), f"g:{correo}") is None:
             log.warning("Intento de entrar con una cuenta de Google no autorizada: %s", correo)
             self._pagina(403, "Esta cuenta no tiene acceso",
                          f"{correo} no está autorizada para ver este panel.", borrar)

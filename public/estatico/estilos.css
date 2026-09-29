@@ -198,6 +198,37 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .vacio p { margin: 6px 0; }
 
 .acciones { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cuenta {
+  color: var(--texto-suave); font-size: 0.85rem; font-weight: 600;
+  max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.compartir { margin-top: 24px; padding-top: 2px; border-top: 1px solid var(--borde); }
+.compartir .explicacion { color: var(--texto-suave); font-size: 0.88rem; margin: 0 0 12px; }
+.compartir .explicacion strong { color: var(--texto); overflow-wrap: anywhere; }
+.form-acceso { display: flex; gap: 8px; }
+.form-acceso input {
+  flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; font: inherit;
+  border: 1px solid var(--borde); background: var(--fondo); color: var(--texto);
+}
+.form-acceso input:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
+.form-acceso button {
+  border: 0; border-radius: 10px; padding: 9px 14px; cursor: pointer; white-space: nowrap;
+  background: var(--texto); color: var(--tarjeta); font-weight: 700;
+}
+.aviso-acceso { font-size: 0.85rem; margin: 8px 0 0; color: var(--texto-suave); }
+.accesos { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; }
+.accesos li {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 12px; border-radius: 10px; background: var(--pista);
+}
+.accesos li.sin-datos-texto { background: none; padding: 0; }
+.accesos .correo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.9rem; }
+.accesos .quitar {
+  border: 0; background: transparent; color: #d4382b; font-weight: 700; font-size: 0.85rem;
+  cursor: pointer; padding: 2px 4px; border-radius: 6px;
+}
+.accesos .quitar:hover { background: var(--tarjeta); }
 .salir {
   color: var(--texto-suave); text-decoration: none; font-weight: 600; font-size: 0.9rem;
   padding: 6px 12px; border-radius: 999px; border: 1px solid var(--borde);

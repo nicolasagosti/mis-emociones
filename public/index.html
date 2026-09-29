@@ -20,6 +20,7 @@
         <button type="button" data-periodo="30">30 días</button>
         <button type="button" data-periodo="todo">Todo</button>
       </div>
+      <span class="cuenta" id="cuenta" hidden></span>
       <a class="salir" id="salir" href="/salir" hidden>Salir</a>
     </div>
   </header>
@@ -65,6 +66,19 @@
       <div class="barras" id="barras"></div>
       <h3>Lo que más sentiste</h3>
       <ol class="frecuentes" id="frecuentes"></ol>
+
+      <section class="compartir" id="compartir" hidden aria-labelledby="titulo-compartir">
+        <h3 id="titulo-compartir">Compartir tu panel</h3>
+        <p class="explicacion">Quien agregues entra con su cuenta de Google en
+          <strong id="enlace-panel"></strong> y ve tu rueda y tus registros, pero no puede modificarlos.</p>
+        <form class="form-acceso" id="form-acceso">
+          <input type="email" id="correo-acceso" placeholder="correo@gmail.com" required
+                 autocomplete="off" aria-label="Correo de Google de la persona">
+          <button type="submit">Dar acceso</button>
+        </form>
+        <p class="aviso-acceso" id="aviso-acceso" role="status" hidden></p>
+        <ul class="accesos" id="accesos"></ul>
+      </section>
     </aside>
 
     <section class="registros" aria-labelledby="titulo-registros">

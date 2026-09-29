@@ -57,10 +57,24 @@ dirección (el bot sigue conectado a la versión principal).
 
 6. Vuelve a publicar. En la página aparece **Entrar con Google**.
 
+### Compartir el panel (por ejemplo, con tu psicóloga)
+
+1. **Una sola vez**, en Google Cloud: *Google Auth Platform* → **Audience** → **Publish app**.
+   Así cualquier cuenta de Google puede pasar por la pantalla de Google; igual solo entran los
+   correos que tú autorices. Como la app solo pide el correo, Google no exige verificarla.
+   (Si prefieres dejarla "en prueba", agrega a cada persona también como *Test user*.)
+2. En tu panel, en **Compartir tu panel**, escribe su correo de Google y toca **Dar acceso**.
+3. Envíale el enlace del panel: entra con **Entrar con Google** y ve tu rueda y tus registros en
+   **solo lectura** (no puede borrar nada ni compartirlo con otras personas).
+4. Para dejar de compartir, toca **Quitar**: pierde el acceso en el acto.
+
 ### Seguridad
-- El panel está en internet, así que para ver tus datos hay que iniciar sesión: con Google (solo
-  los correos de `GOOGLE_CORREOS`) o con el enlace de `/panel` (firmado, vence en 10 minutos;
-  solo el dueño del bot puede pedirlo). La sesión dura 30 días en ese navegador.
+- El panel está en internet, así que para ver tus datos hay que iniciar sesión: con Google o con
+  el enlace de `/panel` (firmado, vence en 10 minutos; solo el dueño del bot puede pedirlo).
+  La sesión dura 30 días en ese navegador.
+- Hay dos roles: **dueño** (los correos de `GOOGLE_CORREOS` y el dueño del bot) y **solo
+  lectura** (las personas con las que compartes el panel). Los permisos se revisan en cada
+  pedido, así que quitar un acceso tiene efecto inmediato.
 - El inicio con Google usa el flujo estándar con `state` y PKCE, y valida que la cuenta de Google
   sea para esta app, esté vigente y tenga el correo verificado.
 - El bot queda para la primera persona que le escribe. Escríbele apenas lo conectes, o fija tu ID

@@ -218,6 +218,12 @@ class TestInicioConGoogle(ServidorDePrueba):
         self.assertEqual(self.volver(parametros["state"], "")[0], 400)  # sin la cookie del primer paso
         self.assertEqual(self.pedidos_a_google, [])
 
+    def test_entra_alguien_con_quien_compartiste(self):
+        self.bd.dar_acceso("psico@gmail.com", 0)
+        self.correo = "Psico@gmail.com"
+        parametros, cookie = self.ir_a_google()
+        self.assertEqual(self.volver(parametros["state"], cookie)[0], 303)
+
     def test_correo_no_autorizado(self):
         self.correo = "intruso@gmail.com"
         parametros, cookie = self.ir_a_google()
@@ -225,6 +231,59 @@ class TestInicioConGoogle(ServidorDePrueba):
         self.assertEqual(estado, 403)
         self.assertIn(b"intruso@gmail.com", cuerpo)
         self.assertFalse(any(c.startswith("sesion=") for c in cabeceras.get_all("Set-Cookie") or []))
+
+
+class TestCompartir(ServidorDePrueba):
+    config = dict(url_publica="https://emociones.example", solo_local=False, en_vercel=True,
+                  produccion=True, google_id="cliente", google_secreto="secreto",
+                  google_correos={"yo@gmail.com"})
+
+    def sesion_de(self, correo):
+        return {"Cookie": "sesion=" + sesion.firmar("secreto", "sesion", f"g:{correo}", 600)}
+
+    def compartir(self, correo, cabeceras=None):
+        cabeceras = {**self.sesion_de("yo@gmail.com"), "Content-Type": "application/json", **(cabeceras or {})}
+        return self.pedir("/api/accesos", "POST", cabeceras, json.dumps({"correo": correo}).encode())
+
+    def test_el_dueno_ve_su_rol(self):
+        estado = json.loads(self.pedir("/api/estado", cabeceras=self.sesion_de("yo@gmail.com"))[2])
+        self.assertEqual((estado["rol"], estado["cuenta"], estado["url"]),
+                         ("dueno", "yo@gmail.com", "https://emociones.example"))
+
+    def test_compartir_en_solo_lectura_y_quitar_el_acceso(self):
+        estado, _, cuerpo = self.compartir("Psico@Gmail.com")
+        self.assertEqual(estado, 200)
+        self.assertEqual([a["correo"] for a in json.loads(cuerpo)["accesos"]], ["psico@gmail.com"])
+
+        lectora = self.sesion_de("psico@gmail.com")
+        registro_id, _ = self.bd.crear_registro(int(time.time()), "llueve", None, 7, [("triste", "tristeza")])
+        self.assertEqual(self.pedir("/api/registros", cabeceras=lectora)[0], 200)
+        self.assertEqual(self.pedir(f"/api/registros/{registro_id}", "DELETE", lectora)[0], 403)
+        self.assertEqual(self.pedir("/api/accesos", cabeceras=lectora)[0], 403)
+        estado = json.loads(self.pedir("/api/estado", cabeceras=lectora)[2])
+        self.assertEqual((estado["rol"], estado["cuenta"]), ("lectura", "psico@gmail.com"))
+
+        # Quitarle el acceso corta su sesión en el acto, sin tocar los registros.
+        quitar = self.pedir("/api/accesos/psico%40gmail.com", "DELETE", self.sesion_de("yo@gmail.com"))
+        self.assertEqual(quitar[0], 204)
+        self.assertEqual(self.pedir("/api/registros", cabeceras=lectora)[0], 401)
+        self.assertEqual(self.bd.obtener_registro(registro_id)["causa"], "llueve")
+
+    def test_solo_el_dueno_comparte(self):
+        self.bd.dar_acceso("psico@gmail.com", 0)
+        cuerpo = b'{"correo": "otra@gmail.com"}'
+        lectora = {**self.sesion_de("psico@gmail.com"), "Content-Type": "application/json"}
+        self.assertEqual(self.pedir("/api/accesos", "POST", lectora, cuerpo)[0], 403)
+        self.assertEqual(self.pedir("/api/accesos", "POST", {"Content-Type": "application/json"}, cuerpo)[0], 401)
+        self.assertFalse(self.bd.tiene_acceso("otra@gmail.com"))
+
+    def test_correos_invalidos_y_otros_sitios(self):
+        for correo in ("", "no-es-correo", "a@b", "dos@gmail.com,tres@gmail.com", "x" * 250 + "@gmail.com"):
+            self.assertEqual(self.compartir(correo)[0], 400, correo)
+        como_texto = {**self.sesion_de("yo@gmail.com"), "Content-Type": "text/plain"}
+        self.assertEqual(self.pedir("/api/accesos", "POST", como_texto, b'{"correo": "a@b.co"}')[0], 415)
+        self.assertEqual(self.compartir("psico@gmail.com", {"Origin": "https://sitio-ajeno.com"})[0], 403)
+        self.assertEqual(self.compartir("psico@gmail.com", {"Origin": "https://emociones.example"})[0], 200)
 
 
 if __name__ == "__main__":
