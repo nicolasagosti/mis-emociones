@@ -6,7 +6,7 @@ compartieron los ve en solo lectura.
 Rutas:
     GET    /api/estado                 qué está configurado y quién entró (sin datos del diario)
     GET    /api/rueda                  la rueda de los sentimientos (público)
-    GET    /api/registros[?diario=id]  tu diario, o uno que te compartieron
+    GET    /api/registros[?diario=id]  tu diario, o uno que te compartieron (con los nombres de su rueda)
     PATCH  /api/registros/<id>         editar un registro de tu diario: {"causa": "…", "emociones": [
                                        {"id": 7, "emocion": "<id>", "aprender": true}, {"emocion": "<id>"}]}
                                        (las emociones que no se mandan se quitan; las que no tienen id
@@ -18,6 +18,8 @@ Rutas:
     GET    /api/palabras               las palabras que le enseñaste al bot
     POST   /api/palabras               enseñarle una o cambiar dónde va: {"palabra": "…", "emocion": "<id>"}
     DELETE /api/palabras/<palabra>     que la olvide
+    POST   /api/nombres                ponerle tu nombre a una emoción de la rueda: {"emocion": "<id>",
+                                       "nombre": "…"} (vacío: vuelve al original); el bot lo aprende
     POST   /api/telegram/vincular      enlace para vincular tu Telegram (vence en 10 minutos)
     POST   /api/telegram/desvincular   desvincular tu Telegram
     POST   /api/telegram               webhook del bot (solo Telegram, con su clave secreta)
@@ -131,7 +133,8 @@ class Panel(BaseHTTPRequestHandler):
         ruta = urlsplit(self.path).path
         if ruta == "/api/telegram":
             self._webhook()
-        elif ruta in ("/api/accesos", "/api/palabras", "/api/telegram/vincular", "/api/telegram/desvincular"):
+        elif ruta in ("/api/accesos", "/api/palabras", "/api/nombres", "/api/telegram/vincular",
+                      "/api/telegram/desvincular"):
             if not self._mismo_origen():
                 return
             atendible = self._con_cuenta()
@@ -141,6 +144,8 @@ class Panel(BaseHTTPRequestHandler):
                 self._compartir(*atendible)
             elif ruta == "/api/palabras":
                 self._guardar_palabra(*atendible)
+            elif ruta == "/api/nombres":
+                self._renombrar(*atendible)
             elif ruta == "/api/telegram/vincular":
                 self._enlace_para_vincular(atendible[1])
             else:
@@ -213,7 +218,7 @@ class Panel(BaseHTTPRequestHandler):
             return
         desde = consulta.get("desde", [""])[0]
         registros = bd.listar_registros(dueno_id, desde=int(desde) if desde.isdigit() else None) if dueno_id else []
-        self._json({"registros": registros})
+        self._json({"registros": registros, "nombres": bd.nombres(dueno_id) if dueno_id else {}})
 
     def _leer_json(self) -> dict | None:
         """El cuerpo JSON del pedido; si no es JSON, responde el error y devuelve None."""
@@ -251,7 +256,7 @@ class Panel(BaseHTTPRequestHandler):
         datos = self._leer_json()
         if datos is None:
             return
-        edicion = _edicion(registro, datos)
+        edicion = _edicion(registro, datos, bd.nombres(usuario["id"]))
         if edicion is None:
             self._error(400)
             return
@@ -278,6 +283,32 @@ class Panel(BaseHTTPRequestHandler):
             return
         bd.aprender(usuario["id"], palabra, emocion)
         self._palabras(bd, usuario)
+
+    def _renombrar(self, bd: BaseDeDatos, usuario: dict) -> None:
+        """Ponerle tu nombre a una emoción de la rueda (vacío: vuelve al original). El bot aprende el
+        nombre nuevo, así lo entiende cuando lo escribas."""
+        datos = self._leer_json()
+        if datos is None:
+            return
+        emocion, texto = datos.get("emocion"), datos.get("nombre")
+        if not isinstance(emocion, str) or emocion not in rueda.EMOCIONES or not isinstance(texto, str):
+            self._error(400)
+            return
+        if not texto.strip() or rueda.normalizar(texto) == rueda.normalizar(rueda.EMOCIONES[emocion].nombre):
+            bd.renombrar(usuario["id"], emocion, None)
+        else:
+            nombre = rueda.nombre_valido(texto)
+            if nombre is None:
+                self._error(400)
+                return
+            if rueda.nombre_ocupado(nombre, emocion, bd.nombres(usuario["id"])):
+                self._error(409)  # otra emoción de tu rueda ya se llama así
+                return
+            bd.renombrar(usuario["id"], emocion, nombre)
+            palabra = rueda.palabra_valida(nombre)
+            if rueda.significado(palabra, bd.vocabulario(usuario["id"])) != (emocion,):
+                bd.aprender(usuario["id"], palabra, emocion)
+        self._json({"nombres": bd.nombres(usuario["id"])})
 
     def _enlace_para_vincular(self, usuario: dict) -> None:
         cfg = self.config
@@ -558,7 +589,7 @@ class Panel(BaseHTTPRequestHandler):
         log.debug(formato, *args)
 
 
-def _edicion(registro: dict, datos: dict) -> tuple | None:
+def _edicion(registro: dict, datos: dict, nombres: dict[str, str]) -> tuple | None:
     """Valida lo que manda el editor del panel para un registro. Devuelve (causa, quedan, nuevas,
     aprender): las filas que siguen con su emoción nueva (o None si no cambia), las emociones que
     se agregan y las palabras que el bot debe recordar, como (palabra, emoción). None si no es válido."""
@@ -581,7 +612,7 @@ def _edicion(registro: dict, datos: dict) -> tuple | None:
         if fila_id is None:  # una emoción nueva, elegida en la rueda
             if emocion is None:
                 return None
-            nuevas.append((rueda.EMOCIONES[emocion].nombre, emocion))
+            nuevas.append((rueda.nombre(emocion, nombres), emocion))
             continue
         if type(fila_id) is not int or fila_id not in filas or fila_id in quedan:
             return None

@@ -47,18 +47,20 @@ def _en_filas(botones: list[dict], por_fila: int) -> list[list[dict]]:
     return [botones[i:i + por_fila] for i in range(0, len(botones), por_fila)]
 
 
-def _teclado_categorias(prefijo: str) -> list[list[dict]]:
+# `nombres` son los que cada persona les puso a emociones de su rueda ({emocion: nombre}).
+
+def _teclado_categorias(prefijo: str, nombres: dict[str, str]) -> list[list[dict]]:
     return _en_filas(
-        [_boton(f'{c["emoji"]} {c["nombre"]}', f'{prefijo}:c:{c["id"]}') for c in rueda.CATEGORIAS], 3
+        [_boton(f'{c["emoji"]} {rueda.nombre(c["id"], nombres)}', f'{prefijo}:c:{c["id"]}') for c in rueda.CATEGORIAS], 3
     )
 
 
-def _teclado_palabras(prefijo: str, categoria: str) -> list[list[dict]]:
+def _teclado_palabras(prefijo: str, categoria: str, nombres: dict[str, str]) -> list[list[dict]]:
     """Las emociones de una categoría: primero el anillo medio, después el exterior."""
-    nombre = rueda.CATEGORIA[categoria]["nombre"]
+    nombre = rueda.nombre(categoria, nombres)
     emociones = [e for e in rueda.EMOCIONES.values() if e.categoria == categoria and e.anillo != "centro"]
     emociones.sort(key=lambda e: e.anillo != "medio")
-    botones = [_boton(e.nombre, f"{prefijo}:e:{e.id}") for e in emociones]
+    botones = [_boton(rueda.nombre(e.id, nombres), f"{prefijo}:e:{e.id}") for e in emociones]
     botones.append(_boton(f"Solo {nombre.lower()}", f"{prefijo}:e:{categoria}"))
     return _en_filas(botones, 3) + [[_boton("⬅️ Volver", f"{prefijo}:v")]]
 
@@ -70,47 +72,48 @@ def _teclado_registro(registro_id: int, esperando_causa: bool = False) -> list[l
     return teclado
 
 
-def _etiqueta(emocion_id: str) -> str:
+def _etiqueta(emocion_id: str, nombres: dict[str, str]) -> str:
     """«❤️ Enojo › Molesto › Frustrado»."""
-    emocion = rueda.EMOCIONES[emocion_id]
-    categoria = rueda.CATEGORIA[emocion.categoria]
-    return " › ".join([f'{categoria["emoji"]} <b>{categoria["nombre"]}</b>', *rueda.camino(emocion_id)[1:]])
+    emoji = rueda.CATEGORIA[rueda.EMOCIONES[emocion_id].categoria]["emoji"]
+    centro, *resto = (html.escape(n) for n in rueda.camino(emocion_id, nombres))
+    return " › ".join([f"{emoji} <b>{centro}</b>", *resto])
 
 
-def _linea_emocion(fila: dict) -> str:
+def _linea_emocion(fila: dict, nombres: dict[str, str]) -> str:
     palabra = html.escape(fila["palabra"])
     if fila["emocion"] not in rueda.EMOCIONES:
         return f"❔ {palabra} <i>(sin clasificar)</i>"
-    linea = _etiqueta(fila["emocion"])
-    if not rueda.es_forma_de(fila["palabra"], fila["emocion"]):
+    linea = _etiqueta(fila["emocion"], nombres)
+    if not rueda.es_forma_de(fila["palabra"], fila["emocion"], nombres):
         linea += f" <i>({palabra})</i>"
     return linea
 
 
-def _corta(fila: dict) -> str:
+def _corta(fila: dict, nombres: dict[str, str]) -> str:
     """«❤️ Frustrado», para listados."""
     emocion = rueda.EMOCIONES.get(fila["emocion"] or "")
     if emocion is None:
         return f'❔ {html.escape(fila["palabra"])}'
-    return f'{rueda.CATEGORIA[emocion.categoria]["emoji"]} {emocion.nombre}'
+    return f'{rueda.CATEGORIA[emocion.categoria]["emoji"]} {html.escape(rueda.nombre(emocion.id, nombres))}'
 
 
-def _resumen(registro: dict, titulo: str) -> str:
+def _resumen(registro: dict, titulo: str, nombres: dict[str, str]) -> str:
     lineas = [titulo, ""]
-    lineas += [_linea_emocion(f) for f in registro["emociones"]] or ["<i>Sin emociones todavía</i>"]
+    lineas += [_linea_emocion(f, nombres) for f in registro["emociones"]] or ["<i>Sin emociones todavía</i>"]
     if registro["causa"]:
         lineas += ["", f'📝 {html.escape(registro["causa"][:3000])}']
     return "\n".join(lineas)
 
 
-def _texto_rueda() -> str:
+def _texto_rueda(nombres: dict[str, str]) -> str:
     lineas = ["<b>La rueda de los sentimientos</b> (Gloria Willcox)"]
     for categoria in rueda.CATEGORIAS:
-        medio = dict.fromkeys(m for m, _ in categoria["ramas"])
-        exterior = dict.fromkeys(e for _, e in categoria["ramas"] if e not in medio)
+        emociones = [e for e in rueda.EMOCIONES.values() if e.categoria == categoria["id"]]
+        medio = [html.escape(rueda.nombre(e.id, nombres)) for e in emociones if e.anillo == "medio"]
+        exterior = [html.escape(rueda.nombre(e.id, nombres)) for e in emociones if e.anillo == "exterior"]
         lineas += [
             "",
-            f'{categoria["emoji"]} <b>{categoria["nombre"]}</b>',
+            f'{categoria["emoji"]} <b>{html.escape(rueda.nombre(categoria["id"], nombres))}</b>',
             ", ".join(medio),
             f'<i>{", ".join(exterior)}</i>',
         ]
@@ -131,6 +134,7 @@ class Bot:
         self.zona: tzinfo | None = config.zona
         self.usuario_id: int | None = None  # la cuenta de quien escribió lo que se está atendiendo
         self.aprendidas: dict[str, str] = {}
+        self.nombres: dict[str, str] = {}  # los que esa persona les puso a emociones de su rueda
 
     # --- Ciclo principal ---------------------------------------------------------------
 
@@ -196,6 +200,7 @@ class Bot:
         usuario = cuentas.usuario_para_telegram(self.bd, self.config, telegram_id) if telegram_id else None
         self.usuario_id = usuario["id"] if usuario else None
         self.aprendidas = self.bd.vocabulario(self.usuario_id) if usuario else {}
+        self.nombres = self.bd.nombres(self.usuario_id) if usuario else {}
         return usuario is not None
 
     def _es_mio(self, registro: dict | None) -> bool:
@@ -229,6 +234,7 @@ class Bot:
                                      "Desvincúlalo desde esa cuenta y vuelve a intentarlo.")
             return
         log.info("Telegram %s vinculado a la cuenta %s (%s).", telegram_id, usuario["id"], resultado)
+        self.nombres = self.bd.nombres(usuario["id"])  # para la ayuda, con los nombres de su rueda
         sumados = "\nTus registros anteriores se sumaron a esta cuenta." if resultado == "fusionado" else ""
         self.api.enviar(chat_id, f'✅ Listo: este Telegram quedó vinculado a '
                                  f'<b>{html.escape(usuario["correo"] or "tu cuenta")}</b>.{sumados}\n\n{self._ayuda()}')
@@ -270,7 +276,7 @@ class Bot:
             return False
         self.bd.poner_causa(registro_id, texto[:1].upper() + texto[1:])
         registro = self.bd.obtener_registro(registro_id)
-        self.api.enviar(chat_id, _resumen(registro, "📝 <b>Causa guardada</b>"), _teclado_registro(registro_id))
+        self.api.enviar(chat_id, _resumen(registro, "📝 <b>Causa guardada</b>", self.nombres), _teclado_registro(registro_id))
         return True
 
     def _registrar(self, chat_id: int, texto: str, fecha: int) -> None:
@@ -294,7 +300,7 @@ class Bot:
             )
             return
 
-        respuesta = _resumen(self.bd.obtener_registro(registro_id), "✅ <b>Guardado</b>")
+        respuesta = _resumen(self.bd.obtener_registro(registro_id), "✅ <b>Guardado</b>", self.nombres)
         falta_causa = interpretacion.causa is None
         if falta_causa:
             respuesta += "\n\n<b>¿Qué lo causó?</b> Cuéntamelo en tu próximo mensaje."
@@ -318,17 +324,16 @@ class Bot:
         prefijo = f"f:{fila_id}"
         ids = list(opciones) or rueda.sugerencias(palabra, self.aprendidas)
         sugeridas = [[_boton(self._boton_emocion(i), f"{prefijo}:e:{i}")] for i in ids]
-        extra = [] if opciones else _teclado_categorias(prefijo)
+        extra = [] if opciones else _teclado_categorias(prefijo, self.nombres)
         return sugeridas + extra + [[_boton("✖️ Descartar", f"{prefijo}:x")]]
 
     def _teclado_elegir(self, registro_id: int, vacio: bool) -> list[list[dict]]:
         salida = _boton("✖️ Cancelar", f"r:{registro_id}:x") if vacio else _boton("⬅️ Volver", f"r:{registro_id}:k")
-        return _teclado_categorias(f"r:{registro_id}") + [[salida]]
+        return _teclado_categorias(f"r:{registro_id}", self.nombres) + [[salida]]
 
-    @staticmethod
-    def _boton_emocion(emocion_id: str) -> str:
+    def _boton_emocion(self, emocion_id: str) -> str:
         emocion = rueda.EMOCIONES[emocion_id]
-        return f'{rueda.CATEGORIA[emocion.categoria]["emoji"]} ' + " › ".join(rueda.camino(emocion_id))
+        return f'{rueda.CATEGORIA[emocion.categoria]["emoji"]} ' + " › ".join(rueda.camino(emocion_id, self.nombres))
 
     # --- Botones -----------------------------------------------------------------------
 
@@ -367,7 +372,7 @@ class Bot:
         prefijo = f"f:{fila_id}"
         palabra = html.escape(fila["palabra"])
         if accion == "c":
-            self.api.editar_teclado(chat_id, mensaje_id, _teclado_palabras(prefijo, valor))
+            self.api.editar_teclado(chat_id, mensaje_id, _teclado_palabras(prefijo, valor, self.nombres))
         elif accion == "v":
             self.api.editar_teclado(chat_id, mensaje_id, self._teclado_fila(fila_id, fila["palabra"]))
         elif accion == "e":
@@ -376,7 +381,7 @@ class Bot:
             self.bd.aprender(self.usuario_id, clave, valor)
             self.aprendidas[clave] = valor
             self.api.editar(chat_id, mensaje_id,
-                            f"«{palabra}» → {_etiqueta(valor)}\n<i>La próxima vez la reconoceré sola.</i>")
+                            f"«{palabra}» → {_etiqueta(valor, self.nombres)}\n<i>La próxima vez la reconoceré sola.</i>")
             return "Guardado"
         elif accion == "x":
             self.bd.borrar_fila(fila_id)
@@ -397,11 +402,11 @@ class Bot:
         if accion in ("m", "v"):
             self.api.editar_teclado(chat_id, mensaje_id, self._teclado_elegir(registro_id, vacio))
         elif accion == "c":
-            self.api.editar_teclado(chat_id, mensaje_id, _teclado_palabras(f"r:{registro_id}", valor))
+            self.api.editar_teclado(chat_id, mensaje_id, _teclado_palabras(f"r:{registro_id}", valor, self.nombres))
         elif accion == "e":
-            self.bd.agregar_emocion(registro_id, rueda.EMOCIONES[valor].nombre, valor)
+            self.bd.agregar_emocion(registro_id, rueda.nombre(valor, self.nombres), valor)
             self.api.editar(chat_id, mensaje_id,
-                            _resumen(self.bd.obtener_registro(registro_id), "✅ <b>Guardado</b>"),
+                            _resumen(self.bd.obtener_registro(registro_id), "✅ <b>Guardado</b>", self.nombres),
                             _teclado_registro(registro_id, esperando))
             return "Agregada"
         elif accion == "k":
@@ -432,13 +437,14 @@ class Bot:
             self.api.editar_teclado(chat_id, mensaje_id, None)
             return "Vuelve a escribir /palabra seguido de la palabra."
         if accion == "c":
-            self.api.editar_teclado(chat_id, mensaje_id, _teclado_palabras("p:0", valor))
+            self.api.editar_teclado(chat_id, mensaje_id, _teclado_palabras("p:0", valor, self.nombres))
         elif accion == "v":
-            self.api.editar_teclado(chat_id, mensaje_id, _teclado_categorias("p:0") + [[_boton("✖️ Cancelar", "p:0:x")]])
+            self.api.editar_teclado(chat_id, mensaje_id,
+                                    _teclado_categorias("p:0", self.nombres) + [[_boton("✖️ Cancelar", "p:0:x")]])
         elif accion == "e":
             self.bd.aprender(self.usuario_id, palabra, valor)
             self.aprendidas[palabra] = valor
-            self.api.editar(chat_id, mensaje_id, f"«{html.escape(palabra)}» → {_etiqueta(valor)}\n"
+            self.api.editar(chat_id, mensaje_id, f"«{html.escape(palabra)}» → {_etiqueta(valor, self.nombres)}\n"
                                                  "<i>Desde ahora la entiendo así.</i>")
             return "Guardada"
         elif accion == "x":
@@ -458,7 +464,7 @@ class Bot:
         elif comando == "panel":
             self._enviar_enlace_panel(chat_id, usuario_id)
         elif comando == "rueda":
-            self.api.enviar(chat_id, _texto_rueda())
+            self.api.enviar(chat_id, _texto_rueda(self.nombres))
         elif comando == "hoy":
             self.api.enviar(chat_id, self._texto_hoy())
         elif comando in ("semana", "resumen"):
@@ -468,7 +474,7 @@ class Bot:
             if registro is None:
                 self.api.enviar(chat_id, "Todavía no hay registros.")
             else:
-                self.api.enviar(chat_id, _resumen(registro, "¿Borro este registro?"), [[
+                self.api.enviar(chat_id, _resumen(registro, "¿Borro este registro?", self.nombres), [[
                     _boton("Sí, borrar", f'r:{registro["id"]}:D'), _boton("No", f'r:{registro["id"]}:k'),
                 ]])
         elif comando == "palabras":
@@ -488,9 +494,9 @@ class Bot:
     def _significado(self, palabra: str) -> str:
         ids = rueda.significado(palabra, self.aprendidas)
         if len(ids) == 1:
-            return f"Hoy la entiendo como {_etiqueta(ids[0])}."
+            return f"Hoy la entiendo como {_etiqueta(ids[0], self.nombres)}."
         if ids:
-            return "Hoy está en dos lugares de la rueda: " + " o ".join(_etiqueta(i) for i in ids) + "."
+            return "Hoy está en dos lugares de la rueda: " + " o ".join(_etiqueta(i, self.nombres) for i in ids) + "."
         return "Hoy no la reconozco."
 
     def _texto_palabras(self) -> str:
@@ -502,7 +508,7 @@ class Bot:
         lineas = ["<b>Tus palabras</b>", ""]
         for palabra, emocion in vocabulario[:80]:
             if emocion in rueda.EMOCIONES:
-                lineas.append(f"• {html.escape(palabra)} → {_etiqueta(emocion)}")
+                lineas.append(f"• {html.escape(palabra)} → {_etiqueta(emocion, self.nombres)}")
         if len(vocabulario) > 80:
             lineas.append(f"… y {len(vocabulario) - 80} más (están todas en la app, en «Mis palabras»).")
         lineas += ["", "Para cambiar una: <code>/palabra agotado</code>", "Para olvidarla: <code>/olvidar agotado</code>"]
@@ -516,7 +522,7 @@ class Bot:
         self.bd.guardar_ajuste(f"palabra:{chat_id}", palabra)  # la leen los botones
         self.api.enviar(chat_id, f"«{html.escape(palabra)}». {self._significado(palabra)}\n\n"
                                  "<b>¿Dónde va?</b> Elige la categoría:",
-                        _teclado_categorias("p:0") + [[_boton("✖️ Cancelar", "p:0:x")]])
+                        _teclado_categorias("p:0", self.nombres) + [[_boton("✖️ Cancelar", "p:0:x")]])
 
     def _olvidar_palabra(self, chat_id: int, texto: str) -> None:
         palabra = rueda.palabra_valida(texto)
@@ -542,7 +548,8 @@ class Bot:
             self.api.enviar(chat_id, f"{texto}\n\n{html.escape(enlace)}")
 
     def _ayuda(self) -> str:
-        categorias = " · ".join(f'{c["emoji"]} {c["nombre"]}' for c in rueda.CATEGORIAS)
+        categorias = " · ".join(f'{c["emoji"]} {html.escape(rueda.nombre(c["id"], self.nombres))}'
+                                for c in rueda.CATEGORIAS)
         texto = (
             "<b>Tu diario de emociones</b> 🎡\n\n"
             "Escríbeme cómo te sientes y qué lo causó, por ejemplo:\n"
@@ -568,7 +575,7 @@ class Bot:
         lineas = [f"<b>Hoy</b> · {len(registros)} registro{'s' if len(registros) != 1 else ''}"]
         for registro in reversed(registros[:30]):
             hora = datetime.fromtimestamp(registro["creado_en"], self.zona).strftime("%H:%M")
-            emociones = " · ".join(_corta(f) for f in registro["emociones"]) or "❔"
+            emociones = " · ".join(_corta(f, self.nombres) for f in registro["emociones"]) or "❔"
             lineas += ["", f"<b>{hora}</b> {emociones}"]
             if registro["causa"]:
                 lineas.append(html.escape(registro["causa"][:200]))
@@ -580,13 +587,14 @@ class Bot:
         if not filas:
             return "En los últimos 7 días no hay emociones registradas."
         por_categoria = Counter(rueda.EMOCIONES[f["emocion"]].categoria for f in filas)
-        por_emocion = Counter(rueda.EMOCIONES[f["emocion"]].nombre for f in filas)
+        por_emocion = Counter(html.escape(rueda.nombre(f["emocion"], self.nombres)) for f in filas)
         maximo = max(por_categoria.values())
         lineas = [f"<b>Últimos 7 días</b> · {len(filas)} emociones en {len(registros)} registros", ""]
         for categoria in rueda.CATEGORIAS:
             cantidad = por_categoria.get(categoria["id"], 0)
             barra = "▰" * round(10 * cantidad / maximo) if cantidad else ""
-            lineas.append(f'{categoria["emoji"]} {categoria["nombre"]}  {barra.ljust(10, "▱")}  {cantidad}')
+            nombre = html.escape(rueda.nombre(categoria["id"], self.nombres))
+            lineas.append(f'{categoria["emoji"]} {nombre}  {barra.ljust(10, "▱")}  {cantidad}')
         frecuentes = ", ".join(f"{nombre} ({n})" for nombre, n in por_emocion.most_common(5))
         lineas += ["", f"<b>Lo que más sentiste:</b> {frecuentes}"]
         return "\n".join(lineas)

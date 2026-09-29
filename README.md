@@ -139,6 +139,13 @@ agregarle o quitarle las tuyas, o tocar un registro en **Tus registros** para ed
 que pasó, mover una emoción a otro lugar de la rueda (y, si quieres, que el bot recuerde esa palabra
 para la próxima), quitarla o agregar otras.
 
+### Los nombres de tu rueda
+
+Toca una palabra de la rueda para cambiarle el nombre en tu diario (por ejemplo, Frustrado →
+«Bloqueado»). Se ve así en la rueda, tus registros, el resumen y las respuestas del bot, que además
+la entiende cuando la escribes; quien vea tu diario compartido también ve tus nombres. Puedes volver
+al nombre original cuando quieras (el lápiz ✎ del panel de la emoción la abre de nuevo).
+
 ## El panel
 
 - **La rueda** tal como en la imagen, con colores más intensos. Lo que sentiste en el período
@@ -146,7 +153,7 @@ para la próxima), quitarla o agregar otras.
 - **Resumen** por categoría y las emociones más frecuentes.
 - **Tus registros** en columnas por categoría o como diario cronológico.
 - Toca una emoción o una categoría (en la rueda o en las barras) para filtrar tus registros;
-  en la rueda, además, se abre un panel con sus palabras.
+  en la rueda, además, puedes cambiarle el nombre y ver sus palabras.
 - Toca un registro para editarlo: lo que pasó y sus emociones.
 - Se actualiza solo cuando llegan mensajes nuevos.
 

@@ -374,6 +374,50 @@ class TestDiarios(ServidorDePrueba):
         self.assertEqual((igual["causa"], [e["emocion"] for e in igual["emociones"]]), ("x", ["tristeza"]))
         self.assertEqual(self.bd.vocabulario(yo["id"]), {})
 
+    def renombrar(self, emocion, nombre, correo="yo@gmail.com", **cabeceras):
+        todas = {**self.sesion_de(correo), "Content-Type": "application/json", **cabeceras}
+        cuerpo = json.dumps({"emocion": emocion, "nombre": nombre}).encode()
+        estado, _, respuesta = self.pedir("/api/nombres", "POST", todas, cuerpo)
+        return estado, json.loads(respuesta).get("nombres")
+
+    def nombres_del_diario(self, correo, diario=None):
+        ruta = "/api/registros" + (f"?diario={diario}" if diario else "")
+        return json.loads(self.pedir(ruta, cabeceras=self.sesion_de(correo))[2])["nombres"]
+
+    def test_renombrar_emociones_de_mi_rueda(self):
+        yo = self.estado("yo@gmail.com")["cuenta"]
+        self.assertEqual(self.renombrar("enojo/frustrado", "  bloqueado "), (200, {"enojo/frustrado": "Bloqueado"}))
+        self.assertEqual(self.bd.vocabulario(yo["id"]), {"bloqueado": "enojo/frustrado"})  # el bot la entiende
+        # Si el bot ya la entendía así, no hace falta enseñársela.
+        self.assertEqual(self.renombrar("enojo/furioso", "Rabia")[0], 200)
+        self.assertNotIn("rabia", self.bd.vocabulario(yo["id"]))
+
+        # Tu diario trae tus nombres, también para quien lo ve compartido; el suyo, no.
+        tuyos = {"enojo/frustrado": "Bloqueado", "enojo/furioso": "Rabia"}
+        self.compartir("psico@gmail.com")
+        self.assertEqual(self.nombres_del_diario("yo@gmail.com"), tuyos)
+        self.assertEqual(self.nombres_del_diario("psico@gmail.com", yo["id"]), tuyos)
+        self.assertEqual(self.nombres_del_diario("psico@gmail.com"), {})
+
+        # Una emoción que agregas en el editor lleva el nombre de tu rueda.
+        registro, _ = self.bd.crear_registro(yo["id"], int(time.time()), "x", None, None, [])
+        self.editar(registro, {"emociones": [{"emocion": "enojo/frustrado"}]})
+        self.assertEqual(self.bd.obtener_registro(registro)["emociones"][0]["palabra"], "Bloqueado")
+
+        # Vacío, o el nombre original: vuelve al original.
+        self.assertEqual(self.renombrar("enojo/frustrado", ""), (200, {"enojo/furioso": "Rabia"}))
+        self.assertEqual(self.renombrar("enojo/furioso", "FURIOSO"), (200, {}))
+
+    def test_nombres_invalidos_u_ocupados(self):
+        for emocion, nombre in (("no/existe", "Hola"), ("enojo", "Frus-trado"), ("enojo", "x" * 21),
+                                ("enojo", 5), (["enojo"], "Hola")):
+            self.assertEqual(self.renombrar(emocion, nombre)[0], 400, (emocion, nombre))
+        self.assertEqual(self.renombrar("enojo/frustrado", "Molesta")[0], 409)  # otra emoción ya se llama así
+        sin_sesion = {"Content-Type": "application/json"}
+        self.assertEqual(self.pedir("/api/nombres", "POST", sin_sesion, b'{"emocion": "enojo", "nombre": "Bronca"}')[0], 401)
+        self.assertEqual(self.renombrar("enojo", "Bronca", Origin="https://sitio-ajeno.com")[0], 403)
+        self.assertEqual(self.nombres_del_diario("yo@gmail.com"), {})
+
     def test_sin_sesion_no_hay_nada(self):
         cabeceras = {"Content-Type": "application/json"}
         self.assertEqual(self.pedir("/api/registros")[0], 401)

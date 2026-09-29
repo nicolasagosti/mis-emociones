@@ -236,14 +236,24 @@ def _palabras_incluidas() -> dict[str, list[str]]:
 PALABRAS_INCLUIDAS = _palabras_incluidas()
 
 
-def camino(emocion_id: str) -> list[str]:
-    """Nombres desde el centro de la rueda: ['Enojo', 'Molesto', 'Frustrado']."""
-    nombres = []
+def ruta(emocion_id: str) -> list[str]:
+    """Ids desde el centro de la rueda: ['enojo', 'enojo/molesto', 'enojo/frustrado']."""
+    ids = []
     emocion = EMOCIONES.get(emocion_id)
     while emocion:
-        nombres.append(emocion.nombre)
+        ids.append(emocion.id)
         emocion = EMOCIONES.get(emocion.padre) if emocion.padre else None
-    return nombres[::-1]
+    return ids[::-1]
+
+
+def nombre(emocion_id: str, nombres: dict[str, str] | None = None) -> str:
+    """Cómo se llama la emoción en la rueda de cada persona: el nombre que le puso, o el original."""
+    return (nombres or {}).get(emocion_id) or EMOCIONES[emocion_id].nombre
+
+
+def camino(emocion_id: str, nombres: dict[str, str] | None = None) -> list[str]:
+    """Nombres desde el centro de la rueda: ['Enojo', 'Molesto', 'Frustrado']."""
+    return [nombre(i, nombres) for i in ruta(emocion_id)]
 
 
 def color(emocion_id: str) -> str:
@@ -252,9 +262,30 @@ def color(emocion_id: str) -> str:
     return CATEGORIA[emocion.categoria]["colores"][anillo]
 
 
-def es_forma_de(palabra: str, emocion_id: str) -> bool:
-    """¿La palabra escrita es el nombre de la emoción (o su femenino/plural)?"""
-    return normalizar(palabra) in _variantes(normalizar(EMOCIONES[emocion_id].nombre))
+def es_forma_de(palabra: str, emocion_id: str, nombres: dict[str, str] | None = None) -> bool:
+    """¿La palabra escrita es el nombre de la emoción, el original o el tuyo (o su femenino/plural)?"""
+    forma = normalizar(palabra)
+    return any(forma in _variantes(normalizar(n)) for n in (EMOCIONES[emocion_id].nombre, nombre(emocion_id, nombres)))
+
+
+def nombre_valido(texto: str) -> str | None:
+    """Un nombre para una emoción de tu rueda: de una a tres palabras, solo letras, hasta 20 caracteres."""
+    palabras = texto.split()
+    if not 1 <= len(palabras) <= 3 or not all(re.fullmatch(r"[^\W\d_]+", p) for p in palabras):
+        return None
+    elegido = " ".join(palabras)
+    return elegido[:1].upper() + elegido[1:] if len(elegido) <= 20 else None
+
+
+def nombre_ocupado(nuevo: str, emocion_id: str, nombres: dict[str, str] | None = None) -> bool:
+    """¿Otra emoción de tu rueda ya se llama así (o como su femenino o plural)?"""
+    formas = _variantes(normalizar(nuevo))
+    propio = normalizar(EMOCIONES[emocion_id].nombre)
+    return any(
+        formas & _variantes(normalizar(nombre(otra, nombres)))
+        for otra in EMOCIONES
+        if otra != emocion_id and normalizar(EMOCIONES[otra].nombre) != propio  # «Agradecido» está dos veces
+    )
 
 
 def sugerencias(palabra: str, aprendidas: dict[str, str] | None = None, cantidad: int = 3) -> list[str]:
@@ -286,7 +317,8 @@ def como_json() -> dict:
         ],
         "emociones": {
             e.id: {"nombre": e.nombre, "categoria": e.categoria, "anillo": e.anillo,
-                   "camino": camino(e.id), "color": color(e.id), "palabras": PALABRAS_INCLUIDAS[e.id]}
+                   "camino": camino(e.id), "ruta": ruta(e.id), "color": color(e.id),
+                   "palabras": PALABRAS_INCLUIDAS[e.id]}
             for e in EMOCIONES.values()
         },
     }

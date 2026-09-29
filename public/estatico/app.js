@@ -5,7 +5,9 @@ const RADIOS = { centro: 118, medio: 222, exterior: 322 };
 const REFRESCO_MS = 8000;
 
 const estado = {
-  rueda: null,
+  ruedaBase: null, // la rueda original, como la manda /api/rueda
+  rueda: null, // la del diario que estás viendo, con los nombres que su dueño les puso a sus emociones
+  nombres: {}, // {emocion: nombre} de ese diario
   registros: [],
   firma: '',
   periodo: leer('periodo', '7'),
@@ -48,6 +50,9 @@ function svg(etiqueta, atributos = {}) {
 
 const normalizar = (texto) => texto.toLowerCase().normalize('NFD').replace(/\p{Mn}/gu, '').trim();
 const info = (fila) => estado.rueda.emociones[fila.emocion];
+// ¿La palabra escrita es el nombre de la emoción (el que le pusiste o el original), o su femenino/plural?
+const esSuNombre = (palabra, datos) => [datos.nombre, datos.original]
+  .some((nombre) => normalizar(palabra).startsWith(normalizar(nombre).slice(0, -1)));
 const categoria = (id) => estado.rueda.categorias.find((c) => c.id === id);
 
 const formatoDia = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -55,6 +60,32 @@ const formatoCorto = new Intl.DateTimeFormat('es', { weekday: 'short', day: 'num
 const formatoHora = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' });
 
 // --- Rueda -----------------------------------------------------------------------
+
+// La rueda con los nombres propios del diario que estás viendo (los demás quedan como en el original).
+function aplicarNombres() {
+  const base = estado.ruedaBase;
+  const nombre = (id) => estado.nombres[id] || base.emociones[id].nombre;
+  estado.rueda = {
+    categorias: base.categorias.map((cat) => ({
+      ...cat,
+      nombre: nombre(cat.id),
+      ramas: cat.ramas.map(({ medio, exterior }) => ({
+        medio: { ...medio, nombre: nombre(medio.id) },
+        exterior: { ...exterior, nombre: nombre(exterior.id) },
+      })),
+    })),
+    emociones: Object.fromEntries(Object.entries(base.emociones).map(([id, emocion]) => [id, {
+      ...emocion, nombre: nombre(id), original: emocion.nombre, camino: emocion.ruta.map(nombre),
+    }])),
+  };
+}
+
+function usarNombres(nombres) {
+  estado.nombres = nombres;
+  aplicarNombres();
+  dibujarRueda();
+  if (estado.filtro) estado.filtro.nombre = estado.rueda.emociones[estado.filtro.id].nombre;
+}
 
 const punto = (r, grados) => {
   const a = (grados * Math.PI) / 180;
@@ -146,6 +177,20 @@ function actualizarRueda(conteo) {
       }
     }
   }
+  ajustarEtiquetas();
+}
+
+// Un nombre largo (como los que les pones a las emociones) se achica hasta caber en su lugar de la rueda.
+function ajustarEtiquetas() {
+  for (const grupo of $('#rueda').querySelectorAll('.seg')) {
+    const { anillo } = grupo.dataset;
+    const texto = grupo.querySelector('text');
+    texto.style.fontSize = '';
+    const medido = anillo === 'centro' ? texto.firstChild : texto;
+    const largo = medido ? medido.getComputedTextLength() : 0; // 0 si está vacía u oculta
+    const cabe = anillo === 'centro' ? 84 : RADIOS[anillo] - RADIOS[anillo === 'medio' ? 'centro' : 'medio'] - 2;
+    if (largo > cabe) texto.style.fontSize = `${(parseFloat(getComputedStyle(texto).fontSize) * cabe) / largo}px`;
+  }
 }
 
 // --- Globo de ayuda sobre la rueda ---------------------------------------------------
@@ -188,6 +233,8 @@ function conectarRueda() {
     const panel = $('#panel-emocion');
     const quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!panel.hidden) panel.scrollIntoView({ block: 'nearest', behavior: quieto ? 'auto' : 'smooth' });
+    // En tu diario, tocar una palabra de la rueda también te deja cambiarle el nombre.
+    if (estado.filtro?.id === id && puedeEditar()) abrirEditorNombre(id);
   };
   lienzo.addEventListener('click', (e) => {
     const grupo = e.target.closest('.seg');
@@ -227,9 +274,7 @@ function chip(fila) {
   nodo.style.setProperty('--color', datos.color);
   nodo.title = datos.camino.join(' › ');
   // Si escribió otra palabra («rabia» → Furioso), se muestra al lado.
-  if (!normalizar(fila.palabra).startsWith(normalizar(datos.nombre).slice(0, -1))) {
-    nodo.append(el('span', 'original', `· ${fila.palabra}`));
-  }
+  if (!esSuNombre(fila.palabra, datos)) nodo.append(el('span', 'original', `· ${fila.palabra}`));
   return nodo;
 }
 
@@ -450,11 +495,12 @@ async function cargarRegistros() {
       return;
     }
     if (!respuesta.ok) return;
-    const { registros } = await respuesta.json();
-    const firma = JSON.stringify(registros);
+    const { registros, nombres = {} } = await respuesta.json();
+    const firma = JSON.stringify([registros, nombres]);
     if (firma === estado.firma) return;
     estado.firma = firma;
     estado.registros = registros;
+    if (JSON.stringify(nombres) !== JSON.stringify(estado.nombres)) usarNombres(nombres);
     dibujar();
   } catch (error) {
     console.warn('No pude leer los registros:', error);
@@ -662,7 +708,7 @@ function dibujarTelegram() {
 // --- Mis palabras: cómo entiende el bot tus palabras ------------------------------------------------
 
 function llenarSelectorEmociones(selector) {
-  if (selector.options.length) return;
+  selector.replaceChildren(); // se arma cada vez: los nombres de tu rueda pueden haber cambiado
   const vacia = el('option', null, 'Elige dónde va en la rueda…');
   vacia.value = '';
   selector.append(vacia);
@@ -876,7 +922,7 @@ function emocionEditable({ id = null, palabra, emocion = null }) {
     casilla.hidden = nueva || selector.value === (emocion || '');
     // Al aparecer: si escribiste el nombre de la emoción, por defecto no cambia lo que esa palabra significa.
     if (estabaOculta && !casilla.hidden) {
-      aprender.checked = !(antes && normalizar(palabra).startsWith(normalizar(antes.nombre).slice(0, -1)));
+      aprender.checked = !(antes && esSuNombre(palabra, antes));
     }
   });
   quitar.addEventListener('click', () => {
@@ -963,6 +1009,66 @@ function iniciarEditorRegistro() {
   $('#cancelar-registro').addEventListener('click', () => $('#dialogo-registro').close());
 }
 
+// --- Cambiarle el nombre a una palabra de tu rueda (tocándola) ------------------------------------
+
+let emocionRenombrada = null;
+
+function avisarNombre(texto) {
+  $('#aviso-nombre').textContent = texto;
+  $('#aviso-nombre').hidden = !texto;
+}
+
+function abrirEditorNombre(id) {
+  emocionRenombrada = id;
+  const datos = estado.rueda.emociones[id];
+  $('#ruta-nombre').textContent = datos.camino.join(' › ');
+  $('#nombre-propio').value = datos.nombre;
+  $('#texto-original').textContent = `Nombre original: ${datos.original}.`;
+  $('#original-nombre').hidden = datos.nombre === datos.original;
+  avisarNombre('');
+  $('#dialogo-nombre').showModal();
+  // En el celular, el foco en el campo abriría el teclado aunque solo quisieras ver sus registros.
+  if (matchMedia('(pointer: coarse)').matches) $('#titulo-nombre').focus();
+  else $('#nombre-propio').select();
+}
+
+async function guardarNombre(nombre) {
+  const respuesta = await fetch('/api/nombres', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ emocion: emocionRenombrada, nombre }),
+  }).catch(() => null);
+  if (!respuesta?.ok) {
+    avisarNombre({
+      400: 'Usa de una a tres palabras, solo con letras (hasta 20 caracteres).',
+      409: 'Otra emoción de tu rueda ya se llama así.',
+    }[respuesta?.status] || 'No pude guardarlo. Intenta de nuevo en un momento.');
+    return;
+  }
+  $('#dialogo-nombre').close();
+  estado.palabras = null; // el bot pudo haber aprendido el nombre nuevo
+  usarNombres((await respuesta.json()).nombres);
+  dibujar();
+}
+
+function iniciarEditorNombre() {
+  $('#form-nombre').addEventListener('submit', (e) => {
+    e.preventDefault();
+    guardarNombre($('#nombre-propio').value);
+  });
+  $('#restaurar-nombre').addEventListener('click', () => guardarNombre(''));
+  $('#cancelar-nombre').addEventListener('click', () => $('#dialogo-nombre').close());
+  $('#renombrar-emocion').addEventListener('click', () => {
+    if (estado.filtro) abrirEditorNombre(estado.filtro.id);
+  });
+  // Tocar fuera de la ventana también la cierra.
+  $('#dialogo-nombre').addEventListener('click', (e) => {
+    const caja = e.currentTarget.getBoundingClientRect();
+    const fuera = e.clientX < caja.left || e.clientX > caja.right || e.clientY < caja.top || e.clientY > caja.bottom;
+    if (e.target === e.currentTarget && fuera) e.currentTarget.close();
+  });
+}
+
 // --- Menú lateral y secciones (#/diario, #/compartido/<id>, #/palabras, #/compartir, #/telegram) ---
 
 function abrirMenu() {
@@ -1040,6 +1146,7 @@ function mostrarDiario(compartido) {
   $('#texto-resaltar').textContent = propio ? 'Resaltar lo que sentí' : 'Resaltar lo que sintió';
   $('#titulo-frecuentes').textContent = propio ? 'Lo que más sentiste' : 'Lo que más sintió';
   $('#titulo-registros').textContent = propio ? 'Tus registros' : 'Sus registros';
+  ajustarEtiquetas(); // si la rueda se dibujó mientras estaba oculta, no se pudo medir
   if (!cambio) return;
   estado.diarioListo = true;
   estado.filtro = null;
@@ -1083,8 +1190,10 @@ async function iniciar() {
     iniciarPalabras();
     iniciarPanelEmocion();
     iniciarEditorRegistro();
+    iniciarEditorNombre();
   }
-  estado.rueda = await (await fetch('/api/rueda')).json();
+  estado.ruedaBase = await (await fetch('/api/rueda')).json();
+  aplicarNombres();
   dibujarRueda();
   conectarRueda();
   conectarControles();

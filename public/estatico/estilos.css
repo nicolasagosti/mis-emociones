@@ -119,6 +119,10 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .fila-emocion .palabra { font-weight: 700; max-width: 8.5rem; overflow-wrap: anywhere; }
 .fila-emocion .palabra.nueva { color: var(--texto-suave); font-weight: 600; }
 .fila-emocion .casilla { grid-column: 1 / -1; font-size: 0.85rem; }
+.original-nombre { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; font-size: 0.85rem; color: var(--texto-suave); }
+.original-nombre .enlace { background: var(--pista); }
+.nota-dialogo { margin: 0; font-size: 0.82rem; color: var(--texto-suave); }
+.acciones-panel { display: flex; gap: 6px; }
 .form-palabra .casilla { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; color: var(--texto-suave); }
 .form-palabra .botones { margin-top: 6px; }
 

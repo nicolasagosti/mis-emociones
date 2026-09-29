@@ -114,7 +114,12 @@
             <section class="tarjeta panel-emocion" id="panel-emocion" hidden aria-labelledby="titulo-emocion">
               <div class="fila-titulo">
                 <h2 id="titulo-emocion"></h2>
-                <button type="button" class="cerrar" id="cerrar-emocion" aria-label="Cerrar y quitar el filtro">✕</button>
+                <div class="acciones-panel">
+                  <button type="button" class="cerrar" id="renombrar-emocion" title="Cambiar el nombre"
+                          aria-label="Cambiar el nombre en tu rueda">✎</button>
+                  <button type="button" class="cerrar" id="cerrar-emocion" title="Cerrar"
+                          aria-label="Cerrar y quitar el filtro">✕</button>
+                </div>
               </div>
               <p class="explicacion" id="ruta-emocion"></p>
               <h3>Tus palabras para esta emoción</h3>
@@ -272,6 +277,26 @@
         <button type="submit" class="boton">Guardar</button>
         <button type="button" class="boton secundario" id="cancelar-registro">Cancelar</button>
         <button type="button" class="boton peligro" id="borrar-registro">Borrar registro</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialogo" id="dialogo-nombre" aria-labelledby="titulo-nombre">
+    <form class="form-palabra" id="form-nombre" method="dialog">
+      <h2 id="titulo-nombre" tabindex="-1" autofocus>Editar palabra</h2>
+      <p class="fecha-registro" id="ruta-nombre"></p>
+      <label for="nombre-propio">Nombre en tu rueda</label>
+      <input id="nombre-propio" required maxlength="20" autocomplete="off" spellcheck="false">
+      <p class="original-nombre" id="original-nombre" hidden>
+        <span id="texto-original"></span>
+        <button type="button" class="enlace" id="restaurar-nombre">Volver al original</button>
+      </p>
+      <p class="nota-dialogo">Cambia solo en tu diario (y para quien lo vea compartido). El bot también va a
+        entender este nombre cuando lo escribas.</p>
+      <p class="aviso-acceso" id="aviso-nombre" role="status" hidden></p>
+      <div class="botones">
+        <button type="submit" class="boton">Guardar</button>
+        <button type="button" class="boton secundario" id="cancelar-nombre">Cancelar</button>
       </div>
     </form>
   </dialog>

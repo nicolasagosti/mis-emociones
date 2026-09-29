@@ -116,6 +116,31 @@ class TestRueda(unittest.TestCase):
         self.assertEqual(rueda.significado("agradecido"), ("calma/agradecido", "fuerza/agradecido"))
         self.assertEqual(rueda.significado("zapato"), ())
 
+    def test_nombres_propios(self):
+        nombres = {"enojo": "Bronca", "enojo/frustrado": "Bloqueado"}
+        self.assertEqual(rueda.ruta("enojo/frustrado"), ["enojo", "enojo/molesto", "enojo/frustrado"])
+        self.assertEqual(rueda.camino("enojo/frustrado", nombres), ["Bronca", "Molesto", "Bloqueado"])
+        self.assertEqual(rueda.nombre("enojo/molesto", nombres), "Molesto")
+        self.assertTrue(rueda.es_forma_de("bloqueadas", "enojo/frustrado", nombres))
+        self.assertTrue(rueda.es_forma_de("frustrada", "enojo/frustrado", nombres))  # el original sigue valiendo
+        self.assertEqual(rueda.como_json()["emociones"]["enojo/frustrado"]["ruta"],
+                         ["enojo", "enojo/molesto", "enojo/frustrado"])
+
+    def test_nombre_valido(self):
+        self.assertEqual(rueda.nombre_valido("  sin   ganas "), "Sin ganas")
+        self.assertEqual(rueda.nombre_valido("ímpetu"), "Ímpetu")
+        for malo in ("", "   ", "Frus-trado", "hola!", "abc123", "una dos tres cuatro", "x" * 21):
+            self.assertIsNone(rueda.nombre_valido(malo), malo)
+
+    def test_nombre_ocupado(self):
+        self.assertTrue(rueda.nombre_ocupado("Molesta", "enojo/frustrado"))  # femenino de otra emoción
+        self.assertFalse(rueda.nombre_ocupado("Bloqueado", "enojo/frustrado"))
+        self.assertFalse(rueda.nombre_ocupado("Agradecido", "calma/agradecido"))  # es el suyo (está dos veces)
+        # Si renombraste Molesto, su nombre queda libre y el nuevo, ocupado.
+        nombres = {"enojo/molesto": "Harto"}
+        self.assertFalse(rueda.nombre_ocupado("Molesto", "enojo/frustrado", nombres))
+        self.assertTrue(rueda.nombre_ocupado("Harta", "enojo/frustrado", nombres))
+
     def test_saludos(self):
         self.assertTrue(rueda.es_saludo("Hola!"))
         self.assertFalse(rueda.es_saludo("hola, estoy triste"))

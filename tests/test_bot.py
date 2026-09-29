@@ -107,6 +107,26 @@ class TestBot(Ayudantes, unittest.TestCase):
         self.escribir("se murió mi planta")
         self.assertEqual(len(self.registros()), 2)
 
+    def test_usa_los_nombres_de_tu_rueda(self):
+        self.escribir("hola")  # queda como dueño
+        yo = self.bd.usuario_por_telegram(7)
+        self.bd.renombrar(yo["id"], "enojo", "Bronca")
+        self.bd.renombrar(yo["id"], "enojo/frustrado", "Bloqueado")
+        self.bd.aprender(yo["id"], "bloqueado", "enojo/frustrado")  # la app se la enseña al renombrarla
+        self.escribir("bloqueada: el tráfico")
+        [registro] = self.registros()
+        self.assertEqual(registro["emociones"][0]["emocion"], "enojo/frustrado")
+        texto, _ = self.api.enviados[-1]
+        self.assertIn("<b>Bronca</b> › Molesto › Bloqueado", texto)
+        self.assertNotIn("(bloqueada)", texto)  # es su nombre, en femenino
+        self.escribir("/rueda")
+        self.assertIn("<b>Bronca</b>", self.api.enviados[-1][0])
+        self.assertIn("Bloqueado", self.api.enviados[-1][0])
+        self.tocar(f'r:{registro["id"]}:c:enojo')
+        textos = [boton["text"] for fila in self.api.teclados[-1] for boton in fila]
+        self.assertIn("Bloqueado", textos)
+        self.assertIn("Solo bronca", textos)
+
     def test_panel_manda_un_enlace_firmado(self):
         self.escribir("hola")  # queda como dueño
         self.escribir("/panel")

@@ -90,10 +90,12 @@ class TestMigracion(unittest.TestCase):
         con_tu_telegram = cuentas.usuario_para_telegram(self.bd, varios, 7)
         self.assertIsNone(con_tu_telegram["correo"])
         self.assertEqual(len(self.bd.listar_registros(con_tu_telegram["id"])), 1)
-        # …y cuando lo vinculas desde tu cuenta de Google, se suman a ella.
+        # …y cuando lo vinculas desde tu cuenta de Google, se suman a ella (también los nombres de tu rueda).
+        self.bd.renombrar(con_tu_telegram["id"], "enojo", "Bronca")
         yo = cuentas.usuario_para_correo(self.bd, varios, "yo@gmail.com")
         self.assertEqual(cuentas.vincular_telegram(self.bd, yo, 7), "fusionado")
         self.comprobar_adopcion(self.bd.usuario(yo["id"]))
+        self.assertEqual(self.bd.nombres(yo["id"]), {"enojo": "Bronca"})
         self.assertIsNone(self.bd.usuario(con_tu_telegram["id"]))
 
     def test_abrir_dos_veces_no_rompe_nada(self):
