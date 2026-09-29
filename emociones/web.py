@@ -6,6 +6,8 @@ Rutas:
     GET    /api/registros       tus registros (requiere sesión fuera de tu computadora)
     DELETE /api/registros/<id>  borrar un registro (ídem)
     POST   /api/telegram        webhook del bot (solo Telegram, con su clave secreta)
+    GET    /auth/google         lleva a Google para elegir la cuenta
+    GET    /auth/google/callback  Google vuelve aquí: si el correo está autorizado, abre la sesión
     GET    /entrar?t=…          enlace que manda /panel: abre la sesión
     GET    /salir               cierra la sesión
 """
@@ -20,7 +22,7 @@ from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import rueda, sesion
+from . import google, rueda, sesion
 from .bd import BaseDeDatos
 from .bot import Bot, conectar_webhook, es_dueno
 from .config import LOCALES, RAIZ, Configuracion
@@ -79,10 +81,14 @@ class Panel(BaseHTTPRequestHandler):
             if bd:
                 desde = consulta.get("desde", [""])[0]
                 self._json({"registros": bd.listar_registros(desde=int(desde) if desde.isdigit() else None)})
+        elif url.path == "/auth/google":
+            self._google_ida()
+        elif url.path == "/auth/google/callback":
+            self._google_vuelta(consulta)
         elif url.path == "/entrar":
             self._entrar(consulta.get("t", [""])[0])
         elif url.path == "/salir":
-            self._redirigir("/", self._cookie("", 0))
+            self._redirigir("/", self._cookie("sesion", "", 0))
         elif url.path == "/":
             self._archivo("index.html")
         elif url.path.startswith("/estatico/"):
@@ -119,21 +125,33 @@ class Panel(BaseHTTPRequestHandler):
         bd = self._bd()
         if bd is None:
             self._error(503)
-        elif self.config.requiere_sesion and self._usuario(bd) is None:
+        elif self.config.requiere_sesion and self._sujeto(bd) is None:
             self._error(401)
         else:
             return bd
         return None
 
-    def _usuario(self, bd: BaseDeDatos) -> int | None:
-        cookie = SimpleCookie()
+    def _cookies(self) -> SimpleCookie:
+        cookies = SimpleCookie()
         try:
-            cookie.load(self.headers.get("Cookie", ""))
+            cookies.load(self.headers.get("Cookie", ""))
         except CookieError:
-            return None
-        valor = cookie["sesion"].value if "sesion" in cookie else None
-        usuario = sesion.verificar(self.config.token, "sesion", valor)
-        return usuario if es_dueno(bd, self.config.permitidos, usuario) else None
+            pass
+        return cookies
+
+    def _sujeto(self, bd: BaseDeDatos) -> str | None:
+        """Quién tiene la sesión abierta («t:<id>» o «g:<correo>»), si todavía puede entrar."""
+        cookie = self._cookies().get("sesion")
+        sujeto = sesion.verificar(self.config.clave_sesion, "sesion", cookie.value if cookie else None)
+        return sujeto if self._puede_entrar(bd, sujeto) else None
+
+    def _puede_entrar(self, bd: BaseDeDatos, sujeto: str | None) -> bool:
+        tipo, _, valor = (sujeto or "").partition(":")
+        if tipo == "t" and valor.isdigit():
+            return es_dueno(bd, self.config.permitidos, int(valor))
+        if tipo == "g":
+            return valor in self.config.google_correos
+        return False
 
     def _estado(self) -> dict:
         cfg = self.config
@@ -145,9 +163,10 @@ class Panel(BaseHTTPRequestHandler):
                 log.exception("No pude conectar con la base de datos")
         return {
             "requiere_sesion": cfg.requiere_sesion,
-            "sesion": not cfg.requiere_sesion or (bd is not None and self._usuario(bd) is not None),
+            "sesion": not cfg.requiere_sesion or (bd is not None and self._sujeto(bd) is not None),
             "vercel": cfg.en_vercel,
             "base_de_datos": bd is not None,
+            "google": cfg.google_listo,
             "token": bool(cfg.token),
             "bot": self._estado_bot(bd is not None),
         }
@@ -178,17 +197,65 @@ class Panel(BaseHTTPRequestHandler):
         return "conectado"
 
     def _entrar(self, firma: str) -> None:
+        """El enlace de /panel: solo lo genera el bot, para el dueño."""
         bd = self._bd()
-        usuario = sesion.verificar(self.config.token, "entrar", firma)
-        if bd is None or not es_dueno(bd, self.config.permitidos, usuario):
+        sujeto = sesion.verificar(self.config.clave_sesion, "entrar", firma)
+        if bd is None or not (sujeto or "").startswith("t:") or not self._puede_entrar(bd, sujeto):
             self._pagina(403, "El enlace venció o no es válido",
                          "Pídele uno nuevo a tu bot de Telegram con el comando /panel.")
             return
-        valor = sesion.firmar(self.config.token, "sesion", usuario, sesion.DURACION_SESION)
-        self._redirigir("/", self._cookie(valor, sesion.DURACION_SESION))
+        self._abrir_sesion(sujeto)
 
-    def _cookie(self, valor: str, duracion: int) -> str:
-        partes = [f"sesion={valor}", "Path=/", f"Max-Age={duracion}", "HttpOnly", "SameSite=Lax"]
+    def _google_ida(self) -> None:
+        cfg = self.config
+        if not cfg.google_listo:
+            self._pagina(503, "El inicio con Google no está configurado",
+                         "Faltan GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET o GOOGLE_CORREOS en la configuración.")
+            return
+        # state evita que otro sitio complete un inicio de sesión a tu nombre; el verificador
+        # (PKCE) hace que el código que devuelve Google no sirva sin esta misma cookie.
+        state, verificador = google.nuevo_intento()
+        destino = google.url_autorizacion(cfg.google_id, self._vuelta_google(), state, verificador)
+        self._redirigir(destino, self._cookie("google", f"{state}.{verificador}", 600, "/auth/google"))
+
+    def _google_vuelta(self, consulta: dict[str, list[str]]) -> None:
+        cfg = self.config
+        borrar = self._cookie("google", "", 0, "/auth/google")
+        guardado = self._cookies().get("google")
+        state, _, verificador = (guardado.value if guardado else "").partition(".")
+        recibido = consulta.get("state", [""])[0]
+        codigo = consulta.get("code", [""])[0]
+        if not (cfg.google_listo and state and codigo and hmac.compare_digest(state.encode(), recibido.encode())):
+            self._pagina(400, "No se pudo iniciar sesión",
+                         "El intento venció o se canceló. Vuelve a tocar «Entrar con Google».", borrar)
+            return
+        try:
+            respuesta = cfg.google_token({
+                "code": codigo, "client_id": cfg.google_id, "client_secret": cfg.google_secreto,
+                "redirect_uri": self._vuelta_google(), "grant_type": "authorization_code",
+                "code_verifier": verificador,
+            })
+            correo = google.correo_verificado(respuesta, cfg.google_id)
+        except google.ErrorGoogle as error:
+            log.warning("No se pudo iniciar sesión con Google: %s", error)
+            self._pagina(403, "No pude verificar tu cuenta de Google", "Vuelve a intentarlo en un momento.", borrar)
+            return
+        if correo not in cfg.google_correos:
+            log.warning("Intento de entrar con una cuenta de Google no autorizada: %s", correo)
+            self._pagina(403, "Esta cuenta no tiene acceso",
+                         f"{correo} no está autorizada para ver este panel.", borrar)
+            return
+        self._abrir_sesion(f"g:{correo}", borrar)
+
+    def _vuelta_google(self) -> str:
+        return f"{self.config.url_publica}/auth/google/callback"
+
+    def _abrir_sesion(self, sujeto: str, *otras_cookies: str) -> None:
+        valor = sesion.firmar(self.config.clave_sesion, "sesion", sujeto, sesion.DURACION_SESION)
+        self._redirigir("/", self._cookie("sesion", valor, sesion.DURACION_SESION), *otras_cookies)
+
+    def _cookie(self, nombre: str, valor: str, duracion: int, ruta: str = "/") -> str:
+        partes = [f"{nombre}={valor}", f"Path={ruta}", f"Max-Age={duracion}", "HttpOnly", "SameSite=Lax"]
         if self.config.url_publica.startswith("https://"):
             partes.append("Secure")
         return "; ".join(partes)
@@ -215,7 +282,7 @@ class Panel(BaseHTTPRequestHandler):
         try:
             with bd.abierta():
                 bot = Bot(cfg.api(cfg.token), bd, cfg.permitidos, url_panel=cfg.url_publica,
-                          clave=cfg.token, zona=cfg.zona)
+                          clave=cfg.clave_sesion, zona=cfg.zona)
                 bot.procesar(novedad)
         except Exception:
             # Se responde 200 igual: si Telegram reintentara, podría duplicar el registro.
@@ -242,7 +309,7 @@ class Panel(BaseHTTPRequestHandler):
             return
         self._enviar(200, ruta.read_bytes(), TIPOS.get(ruta.suffix, "application/octet-stream"))
 
-    def _pagina(self, codigo: int, titulo: str, texto: str) -> None:
+    def _pagina(self, codigo: int, titulo: str, texto: str, *cookies: str) -> None:
         cuerpo = (
             '<!doctype html><html lang="es"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -250,12 +317,12 @@ class Panel(BaseHTTPRequestHandler):
             f'<body><main class="acceso"><section class="tarjeta"><h1>{html.escape(titulo)}</h1>'
             f'<p>{html.escape(texto)}</p><p><a href="/">Volver al inicio</a></p></section></main></body></html>'
         )
-        self._enviar(codigo, cuerpo.encode(), TIPOS[".html"])
+        self._enviar(codigo, cuerpo.encode(), TIPOS[".html"], cookies)
 
-    def _redirigir(self, destino: str, cookie: str | None = None) -> None:
+    def _redirigir(self, destino: str, *cookies: str) -> None:
         self.send_response(303)
         self.send_header("Location", destino)
-        if cookie:
+        for cookie in cookies:
             self.send_header("Set-Cookie", cookie)
         self.send_header("Content-Length", "0")
         self.send_header("Cache-Control", "no-store")
@@ -268,11 +335,13 @@ class Panel(BaseHTTPRequestHandler):
     def _error(self, codigo: int) -> None:
         self._enviar(codigo, json.dumps({"error": codigo}).encode(), "application/json")
 
-    def _enviar(self, codigo: int, cuerpo: bytes, tipo: str) -> None:
+    def _enviar(self, codigo: int, cuerpo: bytes, tipo: str, cookies: tuple[str, ...] = ()) -> None:
         self.send_response(codigo)
         self.send_header("Content-Type", tipo)
         self.send_header("Content-Length", str(len(cuerpo)))
         self.send_header("Cache-Control", "no-store")
+        for cookie in cookies:
+            self.send_header("Set-Cookie", cookie)
         self._cabeceras_seguridad()
         self.end_headers()
         self.wfile.write(cuerpo)

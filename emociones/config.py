@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable, Mapping
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from . import google
 from .telegram import Telegram
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -30,11 +31,24 @@ class Configuracion:
     produccion: bool = False                  # despliegue de producción en Vercel
     zona: tzinfo | None = None                # None = la hora de la computadora
     api: Callable[[str], Telegram] = Telegram
+    google_id: str = ""
+    google_secreto: str = ""
+    google_correos: set[str] = field(default_factory=set)  # las cuentas que pueden entrar
+    google_token: Callable[[dict], dict] = google.pedir_token
 
     @property
     def requiere_sesion(self) -> bool:
-        """Fuera de tu computadora, el panel pide entrar con el enlace de /panel."""
+        """Fuera de tu computadora, el panel pide entrar (con Google o con /panel)."""
         return not self.solo_local
+
+    @property
+    def google_listo(self) -> bool:
+        return bool(self.google_id and self.google_secreto and self.google_correos)
+
+    @property
+    def clave_sesion(self) -> str:
+        """Secreto con el que se firman los enlaces de /panel y las cookies de sesión."""
+        return self.token or self.google_secreto
 
 
 def _zona(nombre: str) -> tzinfo | None:
@@ -77,4 +91,7 @@ def desde_entorno(entorno: Mapping[str, str] | None = None) -> Configuracion:
         en_vercel=en_vercel,
         produccion=en_vercel and e.get("VERCEL_ENV") == "production",
         zona=_zona(e.get("ZONA_HORARIA", "").strip()),
+        google_id=e.get("GOOGLE_CLIENT_ID", "").strip(),
+        google_secreto=e.get("GOOGLE_CLIENT_SECRET", "").strip(),
+        google_correos={c.strip().lower() for c in e.get("GOOGLE_CORREOS", "").split(",") if c.strip()},
     )

@@ -30,12 +30,39 @@ dirección (el bot sigue conectado a la versión principal).
    | `TELEGRAM_USUARIOS` | opcional: tu ID de Telegram (te lo dice [@userinfobot](https://t.me/userinfobot)) |
 
    Vuelve a publicar (paso 2) y **abre la página una vez**: eso conecta el bot con Telegram.
-5. **Escríbele a tu bot** y envíale `/panel`: te responde con un enlace para entrar al panel.
+5. **Escríbele a tu bot** para quedar como dueño.
+6. **Inicio de sesión con Google** (ver abajo). Mientras no lo configures, puedes entrar enviándole
+   `/panel` al bot: te responde con un enlace para abrir el panel.
+
+### Inicio de sesión con Google
+
+1. En [Google Cloud Console](https://console.cloud.google.com/) crea un proyecto (por ejemplo
+   `mis-emociones`) y selecciónalo.
+2. Ve a **Google Auth Platform** (o *APIs y servicios → Pantalla de consentimiento de OAuth*) →
+   **Comenzar**: nombre de la app `Mis emociones`, tu correo de asistencia, público **Externo**,
+   tu correo de contacto, acepta la política y **Crear**.
+3. En **Público** → **Usuarios de prueba** → agrega tu Gmail. La app queda "en prueba": solo
+   pueden usarla las cuentas de esa lista.
+4. En **Clientes** → **Crear cliente** → tipo **Aplicación web** → en *URIs de redireccionamiento
+   autorizados* agrega exactamente:
+   `https://mis-emociones-one.vercel.app/auth/google/callback` → **Crear**.
+5. Copia el **ID de cliente** y el **secreto** (el secreto se muestra una sola vez) y agrégalos en
+   Vercel, en *Settings → Environment Variables*, junto con los correos que pueden entrar:
+
+   | Variable | Valor |
+   | --- | --- |
+   | `GOOGLE_CLIENT_ID` | el ID de cliente (termina en `.apps.googleusercontent.com`) |
+   | `GOOGLE_CLIENT_SECRET` | el secreto (empieza con `GOCSPX-`) |
+   | `GOOGLE_CORREOS` | tu Gmail; si son varios, separados por coma |
+
+6. Vuelve a publicar. En la página aparece **Entrar con Google**.
 
 ### Seguridad
-- El panel está en internet, así que para ver tus datos hay que entrar con el enlace de `/panel`
-  (firmado, vence en 10 minutos; la sesión dura 30 días en ese navegador). Solo el dueño del bot
-  puede pedirlo.
+- El panel está en internet, así que para ver tus datos hay que iniciar sesión: con Google (solo
+  los correos de `GOOGLE_CORREOS`) o con el enlace de `/panel` (firmado, vence en 10 minutos;
+  solo el dueño del bot puede pedirlo). La sesión dura 30 días en ese navegador.
+- El inicio con Google usa el flujo estándar con `state` y PKCE, y valida que la cuenta de Google
+  sea para esta app, esté vigente y tenga el correo verificado.
 - El bot queda para la primera persona que le escribe. Escríbele apenas lo conectes, o fija tu ID
   en `TELEGRAM_USUARIOS`.
 - Telegram firma cada aviso que manda al webhook y la aplicación rechaza los que no traen la firma.

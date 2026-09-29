@@ -73,7 +73,7 @@ def main() -> None:
         log.info("Modo demo: datos de ejemplo, sin bot de Telegram.")
     elif config.token:
         bot = Bot(config.api(config.token), bd, config.permitidos, url_panel=config.url_publica,
-                  clave=config.token, zona=config.zona)
+                  clave=config.clave_sesion, zona=config.zona)
         hilos.append(threading.Thread(target=bot.ejecutar, args=(detener,), name="bot", daemon=True))
     else:
         log.warning("Falta TELEGRAM_TOKEN en .env: abro solo el panel. El README explica cómo crear el bot.")

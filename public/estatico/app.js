@@ -459,9 +459,14 @@ function mostrarAcceso(servidor) {
   $('#periodos').hidden = true;
   $('#salir').hidden = true;
   $('#acceso').hidden = false;
+  $('#entrar-google').hidden = !servidor.google;
+  $('#acceso-telegram').hidden = servidor.google;
+  $('#acceso-telegram-alternativa').hidden = !servidor.google;
   const pasos = [
     ['Base de datos', servidor.base_de_datos,
       'En Vercel: Storage → Create Database → Neon. Conéctala a este proyecto y vuelve a desplegar.'],
+    ['Inicio con Google', servidor.google,
+      'Agrega GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET y GOOGLE_CORREOS en Settings → Environment Variables (los pasos están en el README) y vuelve a desplegar.'],
     ['Token del bot', servidor.token,
       'Crea el bot con @BotFather y guarda el token como TELEGRAM_TOKEN en Settings → Environment Variables. Luego vuelve a desplegar.'],
     ['Bot conectado', ['conectado', 'local'].includes(servidor.bot), AYUDA_BOT[servidor.bot] || ''],

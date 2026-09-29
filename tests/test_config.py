@@ -1,6 +1,9 @@
+import base64
+import json
 import unittest
+from urllib.parse import parse_qs, urlsplit
 
-from emociones import sesion
+from emociones import google, sesion
 from emociones.config import desde_entorno
 
 
@@ -41,19 +44,72 @@ class TestConfiguracion(unittest.TestCase):
         with self.assertRaises(ValueError):
             desde_entorno({"TELEGRAM_USUARIOS": "yo"})
 
+    def test_google(self):
+        config = desde_entorno({"GOOGLE_CLIENT_ID": " id ", "GOOGLE_CLIENT_SECRET": "s",
+                                "GOOGLE_CORREOS": "Yo@Gmail.com, otra@gmail.com,"})
+        self.assertEqual(config.google_correos, {"yo@gmail.com", "otra@gmail.com"})
+        self.assertTrue(config.google_listo)
+        # Sin lista de correos no se habilita: cualquiera con una cuenta de Google podría entrar.
+        self.assertFalse(desde_entorno({"GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "s"}).google_listo)
+
+
+def id_token(**datos):
+    """Un id_token como el que devuelve Google (la firma no se verifica: llega directo por HTTPS)."""
+    carga = {"iss": "https://accounts.google.com", "aud": "cliente", "exp": 2000,
+             "email": "Yo@Gmail.com", "email_verified": True, **datos}
+    return "cabecera." + base64.urlsafe_b64encode(json.dumps(carga).encode()).decode().rstrip("=") + ".firma"
+
+
+class TestGoogle(unittest.TestCase):
+    def test_url_de_autorizacion(self):
+        url = urlsplit(google.url_autorizacion("cliente", "https://x.example/auth/google/callback", "st", "ver"))
+        parametros = {k: v[0] for k, v in parse_qs(url.query).items()}
+        self.assertEqual(url.netloc, "accounts.google.com")
+        self.assertEqual(parametros["client_id"], "cliente")
+        self.assertEqual(parametros["redirect_uri"], "https://x.example/auth/google/callback")
+        self.assertEqual(parametros["scope"], "openid email")
+        self.assertEqual(parametros["state"], "st")
+        self.assertEqual(parametros["code_challenge"], google.desafio("ver"))
+        self.assertEqual(parametros["code_challenge_method"], "S256")
+
+    def test_correo_verificado(self):
+        self.assertEqual(google.correo_verificado({"id_token": id_token()}, "cliente", ahora=1000), "yo@gmail.com")
+
+    def test_id_token_invalido(self):
+        casos = {
+            "otro emisor": id_token(iss="https://evil.example"),
+            "otra app": id_token(aud="otro-cliente"),
+            "vencido": id_token(exp=999),
+            "correo sin verificar": id_token(email_verified=False),
+            "sin correo": id_token(email=""),
+            "basura": "no-es-un-jwt",
+        }
+        for motivo, token in casos.items():
+            with self.assertRaises(google.ErrorGoogle, msg=motivo):
+                google.correo_verificado({"id_token": token}, "cliente", ahora=1000)
+        with self.assertRaises(google.ErrorGoogle):
+            google.correo_verificado({"error": "invalid_grant"}, "cliente", ahora=1000)
+
 
 class TestSesion(unittest.TestCase):
     def test_firmar_y_verificar(self):
-        firma = sesion.firmar("tok", "sesion", 42, 60, ahora=1000)
-        self.assertEqual(sesion.verificar("tok", "sesion", firma, ahora=1030), 42)
-        self.assertIsNone(sesion.verificar("tok", "sesion", firma, ahora=1061))   # venció
-        self.assertIsNone(sesion.verificar("otro", "sesion", firma, ahora=1030))  # otro token
-        self.assertIsNone(sesion.verificar("tok", "entrar", firma, ahora=1030))   # otro uso
+        for sujeto in ("t:42", "g:alguien.apellido@gmail.com"):
+            firma = sesion.firmar("tok", "sesion", sujeto, 60, ahora=1000)
+            self.assertEqual(sesion.verificar("tok", "sesion", firma, ahora=1030), sujeto)
+            self.assertIsNone(sesion.verificar("tok", "sesion", firma, ahora=1061))   # venció
+            self.assertIsNone(sesion.verificar("otro", "sesion", firma, ahora=1030))  # otra clave
+            self.assertIsNone(sesion.verificar("tok", "entrar", firma, ahora=1030))   # otro uso
 
     def test_firmas_alteradas(self):
-        usuario, vence, firma = sesion.firmar("tok", "sesion", 42, 60, ahora=1000).split(".")
-        for alterada in (f"43.{vence}.{firma}", f"{usuario}.99999.{firma}", f"{usuario}.{vence}.x", "", "a.b", None):
+        sujeto, vence, firma = sesion.firmar("tok", "sesion", "t:42", 60, ahora=1000).split(".")
+        otro = sesion.firmar("tok", "sesion", "t:43", 60, ahora=1000).split(".")[0]
+        for alterada in (f"{otro}.{vence}.{firma}", f"{sujeto}.99999.{firma}", f"{sujeto}.{vence}.x",
+                         f"{sujeto}.{vence}.ñandú", "", "a.b", "%%%.1.x", None):
             self.assertIsNone(sesion.verificar("tok", "sesion", alterada, ahora=1000), alterada)
+
+    def test_clave_de_sesion(self):
+        self.assertEqual(desde_entorno({"TELEGRAM_TOKEN": "t", "GOOGLE_CLIENT_SECRET": "g"}).clave_sesion, "t")
+        self.assertEqual(desde_entorno({"GOOGLE_CLIENT_SECRET": "g"}).clave_sesion, "g")
 
     def test_secreto_del_webhook(self):
         self.assertEqual(sesion.secreto_webhook("a"), sesion.secreto_webhook("a"))

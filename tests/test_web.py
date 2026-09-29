@@ -5,11 +5,13 @@ import time
 import unittest
 import urllib.error
 import urllib.request
+from urllib.parse import parse_qs, urlsplit
 
-from emociones import sesion
+from emociones import google, sesion
 from emociones.config import Configuracion
 from emociones.web import _webhooks_conectados, crear_servidor
 from tests.test_bot import APIFalsa
+from tests.test_config import id_token
 from tests.utiles import nueva_bd
 
 TOKEN = "123:token-de-prueba"
@@ -96,7 +98,7 @@ class TestPanelEnVercel(ServidorDePrueba):
         self.bd.guardar_ajuste("dueno", "7")
 
     def entrar(self, usuario=7):
-        firma = sesion.firmar(TOKEN, "entrar", usuario, 600)
+        firma = sesion.firmar(TOKEN, "entrar", f"t:{usuario}", 600)
         return self.pedir(f"/entrar?t={firma}")
 
     def cookie(self, cabeceras):
@@ -122,13 +124,16 @@ class TestPanelEnVercel(ServidorDePrueba):
 
     def test_enlaces_invalidos(self):
         self.assertEqual(self.entrar(usuario=8)[0], 403)  # no es el dueño
-        vencido = sesion.firmar(TOKEN, "entrar", 7, -1)
+        vencido = sesion.firmar(TOKEN, "entrar", "t:7", -1)
         self.assertEqual(self.pedir(f"/entrar?t={vencido}")[0], 403)
-        de_sesion = sesion.firmar(TOKEN, "sesion", 7, 600)  # una cookie no sirve como enlace
+        de_sesion = sesion.firmar(TOKEN, "sesion", "t:7", 600)  # una cookie no sirve como enlace
         self.assertEqual(self.pedir(f"/entrar?t={de_sesion}")[0], 403)
         # …ni un enlace como cookie
-        enlace = sesion.firmar(TOKEN, "entrar", 7, 600)
+        enlace = sesion.firmar(TOKEN, "entrar", "t:7", 600)
         self.assertEqual(self.pedir("/api/registros", cabeceras={"Cookie": f"sesion={enlace}"})[0], 401)
+
+    def test_google_sin_configurar(self):
+        self.assertEqual(self.pedir("/auth/google")[0], 503)
 
     def test_salir(self):
         estado, cabeceras, _ = self.pedir("/salir")
@@ -162,6 +167,64 @@ class TestPanelEnVercel(ServidorDePrueba):
         [registro] = self.bd.listar_registros()
         self.assertEqual(registro["causa"], "Llueve")
         self.assertIn("Guardado", self.api.enviados[-1][0])
+
+
+class TestInicioConGoogle(ServidorDePrueba):
+    config = dict(url_publica="https://emociones.example", solo_local=False, en_vercel=True,
+                  produccion=True, google_id="cliente", google_secreto="secreto",
+                  google_correos={"yo@gmail.com"})
+
+    def setUp(self):
+        self.pedidos_a_google = []
+        self.correo = "Yo@Gmail.com"
+
+        def token_falso(datos):
+            self.pedidos_a_google.append(datos)
+            return {"id_token": id_token(aud="cliente", exp=time.time() + 60, email=self.correo)}
+
+        self.config = {**self.config, "google_token": token_falso}
+        super().setUp()
+
+    def ir_a_google(self):
+        estado, cabeceras, _ = self.pedir("/auth/google")
+        self.assertEqual(estado, 303)
+        destino = urlsplit(cabeceras["Location"])
+        self.assertEqual(destino.netloc, "accounts.google.com")
+        parametros = {k: v[0] for k, v in parse_qs(destino.query).items()}
+        return parametros, cabeceras["Set-Cookie"].split(";")[0]
+
+    def volver(self, state, cookie):
+        return self.pedir(f"/auth/google/callback?code=codigo-de-google&state={state}",
+                          cabeceras={"Cookie": cookie})
+
+    def test_el_estado_ofrece_google(self):
+        self.assertTrue(json.loads(self.pedir("/api/estado")[2])["google"])
+
+    def test_inicio_de_sesion(self):
+        parametros, cookie = self.ir_a_google()
+        self.assertEqual(parametros["redirect_uri"], "https://emociones.example/auth/google/callback")
+        estado, cabeceras, _ = self.volver(parametros["state"], cookie)
+        self.assertEqual((estado, cabeceras["Location"]), (303, "/"))
+        # PKCE: el verificador que se canjea corresponde al desafío que vio Google.
+        [pedido] = self.pedidos_a_google
+        self.assertEqual(pedido["code"], "codigo-de-google")
+        self.assertEqual(google.desafio(pedido["code_verifier"]), parametros["code_challenge"])
+        [sesion_nueva] = [c for c in cabeceras.get_all("Set-Cookie") if c.startswith("sesion=")]
+        self.assertEqual(self.pedir("/api/registros", cabeceras={"Cookie": sesion_nueva.split(";")[0]})[0], 200)
+
+    def test_state_que_no_coincide(self):
+        parametros, cookie = self.ir_a_google()
+        self.assertEqual(self.volver("otro-state", cookie)[0], 400)
+        self.assertEqual(self.volver(parametros["state"], "")[0], 400)  # sin la cookie del primer paso
+        self.assertEqual(self.pedidos_a_google, [])
+
+    def test_correo_no_autorizado(self):
+        self.correo = "intruso@gmail.com"
+        parametros, cookie = self.ir_a_google()
+        estado, cabeceras, cuerpo = self.volver(parametros["state"], cookie)
+        self.assertEqual(estado, 403)
+        self.assertIn(b"intruso@gmail.com", cuerpo)
+        self.assertFalse(any(c.startswith("sesion=") for c in cabeceras.get_all("Set-Cookie") or []))
 
 
 if __name__ == "__main__":

@@ -209,6 +209,15 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .acceso h1, .acceso h2 { margin-bottom: 12px; }
 .acceso p { color: var(--texto-suave); margin: 0 0 12px; }
 .acceso a { color: var(--texto); }
+.acceso .boton-google {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 12px 18px; margin: 16px 0 18px; border-radius: 999px;
+  border: 1px solid #747775; background: #fff; color: #1f1f1f;
+  font-weight: 600; font-size: 1rem; text-decoration: none;
+}
+.acceso .boton-google:hover { background: #f1f3f4; }
+.acceso .boton-google:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.logo-google { width: 20px; height: 20px; flex: none; }
 .pasos { list-style: none; padding: 0; margin: 18px 0 0; display: grid; gap: 10px; }
 .pasos li {
   display: grid; grid-template-columns: 1.6rem 1fr; gap: 8px; align-items: start;

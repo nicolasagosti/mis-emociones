@@ -104,7 +104,7 @@ class TestBot(unittest.TestCase):
         enlace = teclado[0][0]["url"]
         self.assertTrue(enlace.startswith("https://emociones.example/entrar?t="))
         firma = enlace.split("t=", 1)[1]
-        self.assertEqual(sesion.verificar("123:token", "entrar", firma), 7)
+        self.assertEqual(sesion.verificar("123:token", "entrar", firma), "t:7")
         self.assertIsNone(sesion.verificar("123:token", "sesion", firma))
 
     def test_un_registro_completo_no_se_toma_como_causa(self):

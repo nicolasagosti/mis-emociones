@@ -133,7 +133,7 @@ class Bot:
         self.bd = bd
         self.permitidos = permitidos or set()
         self.url_panel = url_panel
-        self.clave = clave  # el token del bot: firma los enlaces de /panel
+        self.clave = clave  # firma los enlaces de /panel (Configuracion.clave_sesion)
         self.zona = zona
         self.aprendidas: dict[str, str] = {}
 
@@ -426,7 +426,7 @@ class Bot:
         if not self.url_panel or not self.clave:
             self.api.enviar(chat_id, "El panel no está configurado.")
             return
-        firma = sesion.firmar(self.clave, "entrar", usuario_id, sesion.DURACION_ENLACE)
+        firma = sesion.firmar(self.clave, "entrar", f"t:{usuario_id}", sesion.DURACION_ENLACE)
         enlace = f"{self.url_panel}/entrar?t={firma}"
         texto = "🔐 Tu enlace para entrar al panel. Vence en 10 minutos y es solo para ti: no lo compartas."
         if enlace.startswith("https://"):
