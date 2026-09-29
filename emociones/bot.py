@@ -9,13 +9,15 @@ import time
 from collections import Counter
 from datetime import datetime, tzinfo
 
-from . import rueda, sesion
+from . import cuentas, rueda, sesion
 from .bd import BaseDeDatos
+from .config import Configuracion
 from .telegram import ErrorTelegram, Telegram
 
 log = logging.getLogger("emociones.bot")
 
 ESPERA_CAUSA = 30 * 60  # segundos durante los que el próximo mensaje se toma como la causa
+DURACION_VINCULO = 10 * 60  # el enlace para vincular Telegram desde la app
 
 COMANDOS = [
     ("hoy", "Lo que registraste hoy"),
@@ -25,15 +27,6 @@ COMANDOS = [
     ("deshacer", "Borrar el último registro"),
     ("ayuda", "Cómo usar el bot"),
 ]
-
-
-def es_dueno(bd: BaseDeDatos, permitidos: set[int], usuario_id: int | None) -> bool:
-    """¿Puede usar el bot y ver el panel? (TELEGRAM_USUARIOS, o quien le escribió primero)."""
-    if usuario_id is None:
-        return False
-    if permitidos:
-        return usuario_id in permitidos
-    return bd.ajuste("dueno") == str(usuario_id)
 
 
 def conectar_webhook(api: Telegram, url: str, token: str) -> None:
@@ -124,17 +117,18 @@ def _texto_rueda() -> str:
 
 
 class Bot:
-    """No guarda estado en memoria: todo vive en la base de datos, así funciona igual
-    leyendo mensajes en tu computadora que recibiéndolos por webhook en Vercel."""
+    """Un solo bot para todas las cuentas: cada mensaje va al diario de quien lo escribe.
 
-    def __init__(self, api: Telegram, bd: BaseDeDatos, permitidos: set[int] | None = None,
-                 url_panel: str | None = None, clave: str = "", zona: tzinfo | None = None):
+    No guarda estado en memoria entre mensajes: todo vive en la base de datos, así funciona
+    igual leyendo mensajes en tu computadora que recibiéndolos por webhook en Vercel.
+    """
+
+    def __init__(self, api: Telegram, bd: BaseDeDatos, config: Configuracion):
         self.api = api
         self.bd = bd
-        self.permitidos = permitidos or set()
-        self.url_panel = url_panel
-        self.clave = clave  # firma los enlaces de /panel (Configuracion.clave_sesion)
-        self.zona = zona
+        self.config = config
+        self.zona: tzinfo | None = config.zona
+        self.usuario_id: int | None = None  # la cuenta de quien escribió lo que se está atendiendo
         self.aprendidas: dict[str, str] = {}
 
     # --- Ciclo principal ---------------------------------------------------------------
@@ -191,18 +185,52 @@ class Bot:
         return True
 
     def procesar(self, novedad: dict) -> None:
-        self.aprendidas = self.bd.aprendidas()
         if "callback_query" in novedad:
             self._al_tocar_boton(novedad["callback_query"])
         elif "message" in novedad:
             self._al_recibir_mensaje(novedad["message"])
 
-    def _autorizado(self, usuario_id: int | None) -> bool:
-        """Si no se configuró TELEGRAM_USUARIOS, el bot es de la primera persona que le escribe."""
-        if usuario_id is not None and not self.permitidos and self.bd.ajuste("dueno") is None:
-            self.bd.guardar_ajuste("dueno", str(usuario_id))
-            log.info("El usuario %s quedó registrado como dueño del bot.", usuario_id)
-        return es_dueno(self.bd, self.permitidos, usuario_id)
+    def _identificar(self, telegram_id: int | None) -> bool:
+        """Busca la cuenta vinculada a quien escribe. Sin cuenta no puede usar el bot."""
+        usuario = cuentas.usuario_para_telegram(self.bd, self.config, telegram_id) if telegram_id else None
+        self.usuario_id = usuario["id"] if usuario else None
+        self.aprendidas = self.bd.vocabulario(self.usuario_id) if usuario else {}
+        return usuario is not None
+
+    def _es_mio(self, registro: dict | None) -> bool:
+        return registro is not None and registro["usuario_id"] == self.usuario_id
+
+    def _como_vincular(self) -> str:
+        if not self.config.google_listo:
+            return "🔒 Este bot es privado."
+        return (
+            "👋 Para usar este bot, vincúlalo con tu cuenta:\n"
+            f"1. Entra a {html.escape(self.config.url_publica)} con tu cuenta de Google.\n"
+            "2. Toca <b>Vincular Telegram</b>.\n\n"
+            "Si todavía no tienes cuenta, pídele a quien te invitó que comparta su diario con tu correo."
+        )
+
+    def _vincular(self, chat_id: int, telegram_id: int, codigo: str) -> None:
+        """/start <código>: el enlace «Vincular Telegram» de la app."""
+        usuario_id = sesion.verificar_vinculo(self.config.clave_sesion, codigo)
+        usuario = self.bd.usuario(usuario_id) if usuario_id else None
+        if usuario is None:
+            self.api.enviar(chat_id, "Ese enlace para vincular venció o no es válido. "
+                                     "Pide uno nuevo en la app, con «Vincular Telegram».")
+            return
+        if self.config.permitidos and telegram_id not in self.config.permitidos:
+            self.api.enviar(chat_id, "🔒 Este bot es privado.")
+            return
+        resultado = cuentas.vincular_telegram(self.bd, usuario, telegram_id)
+        if resultado == "ocupado":
+            otro = self.bd.usuario_por_telegram(telegram_id)
+            self.api.enviar(chat_id, f'Este Telegram ya está vinculado a otra cuenta ({html.escape(otro["correo"])}). '
+                                     "Desvincúlalo desde esa cuenta y vuelve a intentarlo.")
+            return
+        log.info("Telegram %s vinculado a la cuenta %s (%s).", telegram_id, usuario["id"], resultado)
+        sumados = "\nTus registros anteriores se sumaron a esta cuenta." if resultado == "fusionado" else ""
+        self.api.enviar(chat_id, f'✅ Listo: este Telegram quedó vinculado a '
+                                 f'<b>{html.escape(usuario["correo"] or "tu cuenta")}</b>.{sumados}\n\n{self._ayuda()}')
 
     # --- Mensajes ----------------------------------------------------------------------
 
@@ -210,10 +238,14 @@ class Bot:
         chat_id = mensaje["chat"]["id"]
         if mensaje["chat"].get("type") != "private":
             return
-        if not self._autorizado(mensaje.get("from", {}).get("id")):
-            self.api.enviar(chat_id, "🔒 Este bot es privado.")
-            return
+        telegram_id = mensaje.get("from", {}).get("id")
         texto = (mensaje.get("text") or "").strip()
+        if texto.startswith("/start ") and telegram_id:
+            self._vincular(chat_id, telegram_id, texto.split(maxsplit=1)[1])
+            return
+        if not self._identificar(telegram_id):
+            self.api.enviar(chat_id, self._como_vincular())
+            return
         if not texto:
             self.api.enviar(chat_id, "Por ahora solo entiendo mensajes de texto ✍️")
             return
@@ -233,7 +265,7 @@ class Bot:
         interpretacion = rueda.interpretar(texto, self.aprendidas)
         if interpretacion.explicito and interpretacion.emociones:
             return False
-        if self.bd.obtener_registro(registro_id) is None:
+        if not self._es_mio(self.bd.obtener_registro(registro_id)):
             return False
         self.bd.poner_causa(registro_id, texto[:1].upper() + texto[1:])
         registro = self.bd.obtener_registro(registro_id)
@@ -249,7 +281,8 @@ class Bot:
         # Las palabras ambiguas o desconocidas se guardan sin clasificar y se preguntan aparte.
         filas = [(c.palabra, c.ids[0] if len(c.ids) == 1 else None) for c in interpretacion.emociones]
         filas += [(palabra, None) for palabra in interpretacion.desconocidas]
-        registro_id, fila_ids = self.bd.crear_registro(fecha, interpretacion.causa, texto, chat_id, filas)
+        registro_id, fila_ids = self.bd.crear_registro(self.usuario_id, fecha, interpretacion.causa, texto,
+                                                       chat_id, filas)
 
         if not filas:
             self.api.enviar(
@@ -299,8 +332,8 @@ class Bot:
     # --- Botones -----------------------------------------------------------------------
 
     def _al_tocar_boton(self, boton: dict) -> None:
-        if not self._autorizado(boton.get("from", {}).get("id")) or "message" not in boton:
-            self.api.responder_boton(boton["id"], "Este bot es privado.")
+        if "message" not in boton or not self._identificar(boton.get("from", {}).get("id")):
+            self.api.responder_boton(boton["id"], "Vincula tu cuenta para usar el bot.")
             return
         partes = boton.get("data", "").split(":")
         chat_id = boton["message"]["chat"]["id"]
@@ -327,7 +360,7 @@ class Bot:
     def _boton_fila(self, chat_id: int, mensaje_id: int, fila_id: int, accion: str, valor: str) -> str | None:
         """Botones para clasificar una palabra ambigua o que no está en la rueda."""
         fila = self.bd.obtener_fila(fila_id)
-        if fila is None:
+        if fila is None or not self._es_mio(self.bd.obtener_registro(fila["registro_id"])):
             self.api.editar_teclado(chat_id, mensaje_id, None)
             return "Ese registro ya no existe."
         prefijo = f"f:{fila_id}"
@@ -339,7 +372,7 @@ class Bot:
         elif accion == "e":
             self.bd.clasificar(fila_id, valor)
             clave = rueda.normalizar(fila["palabra"])
-            self.bd.aprender(clave, valor)
+            self.bd.aprender(self.usuario_id, clave, valor)
             self.aprendidas[clave] = valor
             self.api.editar(chat_id, mensaje_id,
                             f"«{palabra}» → {_etiqueta(valor)}\n<i>La próxima vez la reconoceré sola.</i>")
@@ -355,7 +388,7 @@ class Bot:
     def _boton_registro(self, chat_id: int, mensaje_id: int, registro_id: int, accion: str, valor: str) -> str | None:
         """Botones de un registro: agregar emociones, omitir la causa o borrarlo."""
         registro = self.bd.obtener_registro(registro_id)
-        if registro is None:
+        if not self._es_mio(registro):
             self.api.editar_teclado(chat_id, mensaje_id, None)
             return "Ese registro ya no existe."
         vacio = not registro["emociones"]
@@ -405,11 +438,11 @@ class Bot:
         elif comando == "rueda":
             self.api.enviar(chat_id, _texto_rueda())
         elif comando == "hoy":
-            self.api.enviar(chat_id, self._texto_hoy(chat_id))
+            self.api.enviar(chat_id, self._texto_hoy())
         elif comando in ("semana", "resumen"):
-            self.api.enviar(chat_id, self._texto_semana(chat_id))
+            self.api.enviar(chat_id, self._texto_semana())
         elif comando == "deshacer":
-            registro = self.bd.ultimo_registro(chat_id)
+            registro = self.bd.ultimo_registro(self.usuario_id)
             if registro is None:
                 self.api.enviar(chat_id, "Todavía no hay registros.")
             else:
@@ -423,11 +456,11 @@ class Bot:
             self.api.enviar(chat_id, "No conozco ese comando. Prueba /ayuda")
 
     def _enviar_enlace_panel(self, chat_id: int, usuario_id: int) -> None:
-        if not self.url_panel or not self.clave:
+        if not self.config.url_publica or not self.config.clave_sesion:
             self.api.enviar(chat_id, "El panel no está configurado.")
             return
-        firma = sesion.firmar(self.clave, "entrar", f"t:{usuario_id}", sesion.DURACION_ENLACE)
-        enlace = f"{self.url_panel}/entrar?t={firma}"
+        firma = sesion.firmar(self.config.clave_sesion, "entrar", f"t:{usuario_id}", sesion.DURACION_ENLACE)
+        enlace = f"{self.config.url_publica}/entrar?t={firma}"
         texto = "🔐 Tu enlace para entrar al panel. Vence en 10 minutos y es solo para ti: no lo compartas."
         if enlace.startswith("https://"):
             self.api.enviar(chat_id, texto, [[{"text": "Abrir mi panel", "url": enlace}]])
@@ -453,10 +486,9 @@ class Bot:
         )
         return texto
 
-    def _texto_hoy(self, chat_id: int) -> str:
+    def _texto_hoy(self) -> str:
         inicio = datetime.now(self.zona).replace(hour=0, minute=0, second=0, microsecond=0)
-        registros = [r for r in self.bd.listar_registros(desde=int(inicio.timestamp()))
-                     if r["chat_id"] == chat_id]
+        registros = self.bd.listar_registros(self.usuario_id, desde=int(inicio.timestamp()))
         if not registros:
             return f"Hoy todavía no registraste nada. ¿Cómo te sientes?\n{EJEMPLO}"
         lineas = [f"<b>Hoy</b> · {len(registros)} registro{'s' if len(registros) != 1 else ''}"]
@@ -468,9 +500,8 @@ class Bot:
                 lineas.append(html.escape(registro["causa"][:200]))
         return "\n".join(lineas)
 
-    def _texto_semana(self, chat_id: int) -> str:
-        registros = [r for r in self.bd.listar_registros(desde=int(time.time()) - 7 * 86400)
-                     if r["chat_id"] == chat_id]
+    def _texto_semana(self) -> str:
+        registros = self.bd.listar_registros(self.usuario_id, desde=int(time.time()) - 7 * 86400)
         filas = [f for r in registros for f in r["emociones"] if f["emocion"] in rueda.EMOCIONES]
         if not filas:
             return "En los últimos 7 días no hay emociones registradas."

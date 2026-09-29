@@ -13,7 +13,10 @@ const estado = {
   resaltar: leer('resaltar', '1') === '1',
   filtro: null, // { tipo: 'categoria' | 'emocion', id, nombre }
   refresco: null,
-  rol: 'dueno', // 'dueno' o 'lectura' (con quien compartiste el panel)
+  rol: 'dueno', // 'dueno' en tu diario; 'lectura' en uno que te compartieron
+  pestana: 'mio', // 'mio' o 'compartidos'
+  diario: null, // null = tu diario; {id, correo} = uno que te compartieron
+  servidor: null, // la última respuesta de /api/estado
 };
 
 // --- Utilidades ------------------------------------------------------------------
@@ -375,6 +378,7 @@ function dibujar() {
   const registros = visibles();
   const vacio = registros.length === 0;
   $('#vacio').hidden = !vacio || Boolean(filtro);
+  for (const p of document.querySelectorAll('#vacio .solo-propio')) p.hidden = Boolean(estado.diario);
   $('#tablero').hidden = estado.vista !== 'categorias' || (vacio && !filtro);
   $('#diario').hidden = estado.vista !== 'diario' || vacio;
   if (estado.vista === 'categorias') dibujarTablero(registros);
@@ -401,11 +405,18 @@ function desde() {
 async function cargarRegistros() {
   const inicio = desde();
   try {
-    const respuesta = await fetch(`/api/registros${inicio === null ? '' : `?desde=${inicio}`}`);
+    const parametros = new URLSearchParams();
+    if (inicio !== null) parametros.set('desde', inicio);
+    if (estado.diario) parametros.set('diario', estado.diario.id);
+    const respuesta = await fetch(`/api/registros?${parametros}`);
     if (respuesta.status === 401 || respuesta.status === 503) {
       // La sesión venció o falta configurar algo: se vuelve a la pantalla de acceso.
       clearInterval(estado.refresco);
       mostrarAcceso(await (await fetch('/api/estado')).json());
+      return;
+    }
+    if (respuesta.status === 403) {
+      await actualizarCuenta(); // te dejaron de compartir ese diario
       return;
     }
     if (!respuesta.ok) return;
@@ -444,7 +455,12 @@ function conectarControles() {
     dibujar();
   });
   $('#quitar-filtro').addEventListener('click', () => { estado.filtro = null; dibujar(); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) cargarRegistros(); });
+  document.addEventListener('visibilitychange', async () => {
+    // Al volver a la pestaña: quizás vinculaste Telegram o alguien te compartió su diario.
+    if (document.hidden) return;
+    if (estado.servidor?.requiere_sesion && !(await actualizarCuenta())) return;
+    cargarRegistros();
+  });
   estado.refresco = setInterval(() => { if (!document.hidden) cargarRegistros(); }, REFRESCO_MS);
 }
 
@@ -459,10 +475,9 @@ const AYUDA_BOT = {
 };
 
 function mostrarAcceso(servidor) {
-  $('#contenido').hidden = true;
-  $('#periodos').hidden = true;
-  $('#salir').hidden = true;
-  $('#cuenta').hidden = true;
+  for (const id of ['#contenido', '#periodos', '#salir', '#cuenta', '#pestanas', '#aviso-lectura', '#compartidos-vacio']) {
+    $(id).hidden = true;
+  }
   $('#acceso').hidden = false;
   $('#entrar-google').hidden = !servidor.google;
   $('#acceso-telegram').hidden = servidor.google;
@@ -510,10 +525,10 @@ function avisarAcceso(texto) {
 }
 
 async function quitarAcceso(correo) {
-  if (!window.confirm(`¿Quitarle el acceso a ${correo}? Dejará de ver tu panel en el acto.`)) return;
+  if (!window.confirm(`¿Dejar de compartir tu diario con ${correo}? Dejará de verlo en el acto.`)) return;
   const respuesta = await fetch(`/api/accesos/${encodeURIComponent(correo)}`, { method: 'DELETE' });
   if (respuesta.ok) {
-    avisarAcceso(`${correo} ya no puede ver tu panel.`);
+    avisarAcceso(`${correo} ya no puede ver tu diario.`);
     dibujarAccesos(await pedirAccesos());
   }
 }
@@ -531,13 +546,123 @@ function iniciarCompartir(url) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ correo }),
       }));
-      avisarAcceso(`Listo: ${correo} ya puede entrar. Envíale el enlace del panel.`);
+      avisarAcceso(`Listo: ${correo} ya puede ver tu diario. Envíale el enlace de la app.`);
       campo.value = '';
     } catch {
       avisarAcceso('No pude darle acceso: revisa que el correo esté bien escrito.');
     }
   });
-  pedirAccesos().then(dibujarAccesos).catch(() => avisarAcceso('No pude cargar con quién compartiste el panel.'));
+  pedirAccesos().then(dibujarAccesos).catch(() => avisarAcceso('No pude cargar con quién compartiste tu diario.'));
+}
+
+// --- Pestañas: tu diario y los que te compartieron ------------------------------------------
+
+function mostrarPestana(pestana) {
+  const compartidos = estado.servidor?.compartidos || [];
+  const enCompartidos = pestana === 'compartidos';
+  estado.pestana = pestana;
+  guardar('pestana', pestana);
+  for (const boton of document.querySelectorAll('#pestanas button')) {
+    boton.setAttribute('aria-pressed', String(boton.dataset.pestana === pestana));
+  }
+  $('#contador-compartidos').textContent = compartidos.length ? String(compartidos.length) : '';
+
+  estado.diario = enCompartidos
+    ? compartidos.find((d) => d.id === estado.diario?.id) || compartidos[0] || null
+    : null;
+  estado.rol = estado.diario ? 'lectura' : 'dueno';
+  const propio = !estado.diario;
+  $('#titulo-rueda').textContent = propio ? 'Tu rueda' : 'Su rueda';
+  $('#texto-resaltar').textContent = propio ? 'Resaltar lo que sentí' : 'Resaltar lo que sintió';
+  $('#titulo-frecuentes').textContent = propio ? 'Lo que más sentiste' : 'Lo que más sintió';
+  $('#titulo-registros').textContent = propio ? 'Tus registros' : 'Sus registros';
+  const sinDiarios = enCompartidos && !estado.diario;
+  $('#compartidos-vacio').hidden = !sinDiarios;
+  $('#contenido').hidden = sinDiarios;
+  $('#periodos').hidden = sinDiarios;
+  $('#aviso-lectura').hidden = !estado.diario;
+  if (estado.diario) $('#aviso-lectura').textContent = `Estás viendo el diario de ${estado.diario.correo} · solo lectura`;
+  const conCuenta = Boolean(estado.servidor?.requiere_sesion && estado.servidor.cuenta);
+  $('#compartir').hidden = enCompartidos || !conCuenta;
+  $('#telegram').hidden = enCompartidos || !conCuenta || !estado.servidor.token;
+  dibujarSelectorDiarios(enCompartidos ? compartidos : []);
+
+  estado.filtro = null;
+  estado.firma = '';
+  estado.registros = [];
+  if (!sinDiarios) {
+    dibujar();
+    cargarRegistros();
+  }
+}
+
+function dibujarSelectorDiarios(compartidos) {
+  const contenedor = $('#diarios-compartidos');
+  contenedor.hidden = compartidos.length < 2; // con uno solo no hace falta elegir
+  contenedor.replaceChildren(...compartidos.map((diario) => {
+    const boton = el('button', null, diario.correo);
+    boton.type = 'button';
+    boton.setAttribute('aria-pressed', String(diario.id === estado.diario?.id));
+    boton.addEventListener('click', () => {
+      estado.diario = diario;
+      mostrarPestana('compartidos');
+    });
+    return boton;
+  }));
+}
+
+async function actualizarCuenta() {
+  const servidor = await (await fetch('/api/estado')).json();
+  if (servidor.requiere_sesion && !servidor.sesion) {
+    clearInterval(estado.refresco);
+    mostrarAcceso(servidor);
+    return false;
+  }
+  const antes = JSON.stringify(estado.servidor?.compartidos);
+  estado.servidor = servidor;
+  dibujarTelegram();
+  if (JSON.stringify(servidor.compartidos) !== antes) mostrarPestana(estado.pestana);
+  return true;
+}
+
+// --- Vincular Telegram ------------------------------------------------------------------------
+
+function dibujarTelegram() {
+  const cuenta = estado.servidor?.cuenta;
+  if (!cuenta) return;
+  const boton = $('#telegram-boton');
+  $('#telegram-abrir').hidden = true;
+  if (cuenta.telegram) {
+    $('#telegram-estado').textContent = '✓ Tu Telegram está vinculado: lo que le escribas al bot aparece en tu diario.';
+    boton.textContent = 'Desvincular';
+    boton.className = 'secundario';
+  } else {
+    $('#telegram-estado').textContent = 'Vincula tu Telegram para registrar tus emociones escribiéndole al bot.';
+    boton.textContent = 'Vincular Telegram';
+    boton.className = '';
+  }
+}
+
+function iniciarTelegram() {
+  dibujarTelegram();
+  $('#telegram-boton').addEventListener('click', async () => {
+    if (estado.servidor.cuenta.telegram) {
+      if (!window.confirm('¿Desvincular tu Telegram? El bot dejará de guardar en tu diario lo que le escribas.')) return;
+      await fetch('/api/telegram/desvincular', { method: 'POST' });
+      await actualizarCuenta();
+      return;
+    }
+    const respuesta = await fetch('/api/telegram/vincular', { method: 'POST' });
+    if (!respuesta.ok) {
+      $('#telegram-estado').textContent = 'No pude crear el enlace. Intenta de nuevo en un momento.';
+      return;
+    }
+    const abrir = $('#telegram-abrir');
+    abrir.href = (await respuesta.json()).enlace;
+    abrir.hidden = false;
+    $('#telegram-estado').textContent =
+      'Toca «Abrir Telegram para vincular» y después «Iniciar» en el chat del bot. El enlace vence en 10 minutos.';
+  });
 }
 
 async function iniciar() {
@@ -546,21 +671,24 @@ async function iniciar() {
     mostrarAcceso(servidor);
     return;
   }
-  estado.rol = servidor.rol;
-  $('#contenido').hidden = false;
-  $('#periodos').hidden = false;
+  estado.servidor = servidor;
   $('#salir').hidden = !servidor.requiere_sesion;
-  if (servidor.cuenta) {
+  if (servidor.requiere_sesion && servidor.cuenta) {
     $('#cuenta').hidden = false;
-    $('#cuenta').textContent = servidor.rol === 'lectura' ? `Solo lectura · ${servidor.cuenta}` : servidor.cuenta;
+    $('#cuenta').textContent = servidor.cuenta.correo || 'Telegram';
+    $('#pestanas').hidden = false;
+    $('#pestanas').addEventListener('click', (e) => {
+      const boton = e.target.closest('button[data-pestana]');
+      if (boton) mostrarPestana(boton.dataset.pestana);
+    });
+    iniciarCompartir(servidor.url);
+    iniciarTelegram();
   }
-  if (servidor.requiere_sesion && servidor.rol === 'dueno') iniciarCompartir(servidor.url);
   estado.rueda = await (await fetch('/api/rueda')).json();
   dibujarRueda();
   conectarRueda();
   conectarControles();
-  dibujar();
-  await cargarRegistros();
+  mostrarPestana(servidor.requiere_sesion ? leer('pestana', 'mio') : 'mio');
 }
 
 iniciar();

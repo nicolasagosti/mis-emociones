@@ -1,6 +1,7 @@
 """Guardado de registros: SQLite en tu computadora, Postgres (Neon, Supabase…) en Vercel.
 
 Las consultas son las mismas para las dos; solo cambian los tipos de columnas del esquema.
+Cada persona tiene su cuenta (`usuarios`) y sus propios registros y palabras aprendidas.
 """
 
 from __future__ import annotations
@@ -12,6 +13,12 @@ from contextlib import contextmanager
 from pathlib import Path
 
 _TABLAS = """
+CREATE TABLE IF NOT EXISTS usuarios (  -- cada persona que usa la app
+    id          {id},
+    correo      TEXT UNIQUE,          -- su cuenta de Google, en minúsculas
+    telegram_id {entero} UNIQUE,      -- su cuenta de Telegram vinculada
+    creado_en   {entero} NOT NULL
+);
 CREATE TABLE IF NOT EXISTS registros (
     id        {id},
     creado_en {entero} NOT NULL,  -- segundos desde 1970 (UTC)
@@ -27,10 +34,19 @@ CREATE TABLE IF NOT EXISTS registro_emociones (
 );
 CREATE INDEX IF NOT EXISTS idx_registros_fecha ON registros(creado_en);
 CREATE INDEX IF NOT EXISTS idx_emociones_registro ON registro_emociones(registro_id);
-CREATE TABLE IF NOT EXISTS palabras_aprendidas (
-    palabra TEXT PRIMARY KEY,     -- normalizada
-    emocion TEXT NOT NULL
+CREATE TABLE IF NOT EXISTS vocabulario (  -- palabras que cada persona le enseñó al bot
+    usuario_id {entero} NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    palabra    TEXT NOT NULL,     -- normalizada
+    emocion    TEXT NOT NULL,
+    PRIMARY KEY (usuario_id, palabra)
 );
+CREATE TABLE IF NOT EXISTS compartidos (  -- diarios compartidos en solo lectura
+    usuario_id {entero} NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,  -- quién comparte
+    correo     TEXT NOT NULL,                                                 -- con quién
+    creado_en  {entero} NOT NULL,
+    PRIMARY KEY (usuario_id, correo)
+);
+CREATE INDEX IF NOT EXISTS idx_compartidos_correo ON compartidos(correo);
 CREATE TABLE IF NOT EXISTS ajustes (
     clave TEXT PRIMARY KEY,
     valor TEXT
@@ -40,7 +56,12 @@ CREATE TABLE IF NOT EXISTS esperas (  -- registros a los que el bot les está pi
     registro_id {entero} NOT NULL REFERENCES registros(id) ON DELETE CASCADE,
     vence       {entero} NOT NULL
 );
-CREATE TABLE IF NOT EXISTS accesos (  -- cuentas de Google con las que compartiste el panel (solo lectura)
+-- De cuando la app tenía un solo dueño: pasan a su cuenta la primera vez (cuentas.adoptar_legado).
+CREATE TABLE IF NOT EXISTS palabras_aprendidas (
+    palabra TEXT PRIMARY KEY,
+    emocion TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS accesos (
     correo    TEXT PRIMARY KEY,
     creado_en {entero} NOT NULL
 );
@@ -81,7 +102,18 @@ class BaseDeDatos:
                     con.execute(ESQUEMA_POSTGRES)
                 else:
                     con.executescript(ESQUEMA_SQLITE)
+                self._migrar(con)
             BaseDeDatos._preparadas.add(texto)
+
+    def _migrar(self, con) -> None:
+        """Agrega lo que les falta a las bases creadas por versiones anteriores."""
+        if self.postgres:
+            con.execute("ALTER TABLE registros ADD COLUMN IF NOT EXISTS usuario_id BIGINT "
+                        "REFERENCES usuarios(id) ON DELETE CASCADE")
+        elif "usuario_id" not in {c["name"] for c in con.execute("PRAGMA table_info(registros)")}:
+            con.execute("ALTER TABLE registros ADD COLUMN usuario_id INTEGER "
+                        "REFERENCES usuarios(id) ON DELETE CASCADE")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_registros_usuario ON registros(usuario_id, creado_en)")
 
     @contextmanager
     def abierta(self):
@@ -126,15 +158,64 @@ class BaseDeDatos:
         finally:
             con.close()
 
+    def _uno(self, sql: str, parametros: tuple = ()) -> dict | None:
+        with self._conexion() as con:
+            fila = con.execute(sql, parametros).fetchone()
+        return dict(fila) if fila else None
+
+    # --- Usuarios ----------------------------------------------------------------------
+
+    def crear_usuario(self, correo: str | None = None, telegram_id: int | None = None) -> dict:
+        with self._conexion() as con:
+            fila = con.execute(
+                "INSERT INTO usuarios (correo, telegram_id, creado_en) VALUES (?, ?, ?) "
+                "ON CONFLICT DO NOTHING RETURNING *",
+                (correo, telegram_id, int(time.time())),
+            ).fetchone()
+            if fila is None:  # otra petición la creó al mismo tiempo
+                fila = con.execute("SELECT * FROM usuarios WHERE correo = ? OR telegram_id = ?",
+                                   (correo, telegram_id)).fetchone()
+        return dict(fila)
+
+    def usuario(self, usuario_id: int) -> dict | None:
+        return self._uno("SELECT * FROM usuarios WHERE id = ?", (usuario_id,))
+
+    def usuario_por_correo(self, correo: str) -> dict | None:
+        return self._uno("SELECT * FROM usuarios WHERE correo = ?", (correo,))
+
+    def usuario_por_telegram(self, telegram_id: int) -> dict | None:
+        return self._uno("SELECT * FROM usuarios WHERE telegram_id = ?", (telegram_id,))
+
+    def primer_usuario(self) -> dict | None:
+        return self._uno("SELECT * FROM usuarios ORDER BY id LIMIT 1")
+
+    def hay_usuarios(self) -> bool:
+        return self.primer_usuario() is not None
+
+    def vincular_telegram(self, usuario_id: int, telegram_id: int | None) -> None:
+        with self._conexion() as con:
+            con.execute("UPDATE usuarios SET telegram_id = ? WHERE id = ?", (telegram_id, usuario_id))
+
+    def fusionar_cuentas(self, desde: int, hacia: int) -> None:
+        """Pasa los registros, palabras y diarios compartidos de `desde` a `hacia` y borra `desde`."""
+        with self._conexion() as con:
+            con.execute("UPDATE registros SET usuario_id = ? WHERE usuario_id = ?", (hacia, desde))
+            con.execute("INSERT INTO vocabulario (usuario_id, palabra, emocion) SELECT ?, palabra, emocion "
+                        "FROM vocabulario WHERE usuario_id = ? ON CONFLICT DO NOTHING", (hacia, desde))
+            con.execute("INSERT INTO compartidos (usuario_id, correo, creado_en) SELECT ?, correo, creado_en "
+                        "FROM compartidos WHERE usuario_id = ? ON CONFLICT DO NOTHING", (hacia, desde))
+            con.execute("DELETE FROM usuarios WHERE id = ?", (desde,))
+
     # --- Registros ---------------------------------------------------------------------
 
-    def crear_registro(self, creado_en: int, causa: str | None, mensaje: str | None,
+    def crear_registro(self, usuario_id: int | None, creado_en: int, causa: str | None, mensaje: str | None,
                        chat_id: int | None, emociones: list[tuple[str, str | None]]) -> tuple[int, list[int]]:
         """Guarda un registro con sus emociones [(palabra, emocion_id o None)]."""
         with self._conexion() as con:
             registro_id = con.execute(
-                "INSERT INTO registros (creado_en, causa, mensaje, chat_id) VALUES (?, ?, ?, ?) RETURNING id",
-                (creado_en, causa, mensaje, chat_id),
+                "INSERT INTO registros (usuario_id, creado_en, causa, mensaje, chat_id) "
+                "VALUES (?, ?, ?, ?, ?) RETURNING id",
+                (usuario_id, creado_en, causa, mensaje, chat_id),
             ).fetchone()["id"]
             fila_ids = [
                 con.execute(
@@ -157,9 +238,7 @@ class BaseDeDatos:
             con.execute("UPDATE registro_emociones SET emocion = ? WHERE id = ?", (emocion, fila_id))
 
     def obtener_fila(self, fila_id: int) -> dict | None:
-        with self._conexion() as con:
-            fila = con.execute("SELECT * FROM registro_emociones WHERE id = ?", (fila_id,)).fetchone()
-        return dict(fila) if fila else None
+        return self._uno("SELECT * FROM registro_emociones WHERE id = ?", (fila_id,))
 
     def borrar_fila(self, fila_id: int) -> None:
         with self._conexion() as con:
@@ -177,25 +256,22 @@ class BaseDeDatos:
         registros = self._leer("WHERE r.id = ?", (registro_id,))
         return registros[0] if registros else None
 
-    def ultimo_registro(self, chat_id: int) -> dict | None:
-        with self._conexion() as con:
-            fila = con.execute(
-                "SELECT id FROM registros WHERE chat_id = ? ORDER BY creado_en DESC, id DESC LIMIT 1",
-                (chat_id,),
-            ).fetchone()
+    def ultimo_registro(self, usuario_id: int) -> dict | None:
+        fila = self._uno("SELECT id FROM registros WHERE usuario_id = ? ORDER BY creado_en DESC, id DESC LIMIT 1",
+                         (usuario_id,))
         return self.obtener_registro(fila["id"]) if fila else None
 
-    def listar_registros(self, desde: int | None = None, hasta: int | None = None) -> list[dict]:
-        """Registros del período, del más nuevo al más viejo, cada uno con sus emociones."""
+    def listar_registros(self, usuario_id: int, desde: int | None = None, hasta: int | None = None) -> list[dict]:
+        """Registros de una persona en el período, del más nuevo al más viejo, con sus emociones."""
         return self._leer(
-            "WHERE r.creado_en >= ? AND r.creado_en < ?",
-            (desde if desde is not None else 0, hasta if hasta is not None else 2**62),
+            "WHERE r.usuario_id = ? AND r.creado_en >= ? AND r.creado_en < ?",
+            (usuario_id, desde if desde is not None else 0, hasta if hasta is not None else 2**62),
         )
 
     def _leer(self, condicion: str, parametros: tuple) -> list[dict]:
         with self._conexion() as con:
             filas = con.execute(
-                f"""SELECT r.id, r.creado_en, r.causa, r.mensaje, r.chat_id,
+                f"""SELECT r.id, r.usuario_id, r.creado_en, r.causa, r.mensaje, r.chat_id,
                            e.id AS fila_id, e.palabra, e.emocion
                     FROM registros r LEFT JOIN registro_emociones e ON e.registro_id = r.id
                     {condicion}
@@ -205,8 +281,8 @@ class BaseDeDatos:
         registros: dict[int, dict] = {}
         for fila in filas:
             registro = registros.setdefault(fila["id"], {
-                "id": fila["id"], "creado_en": fila["creado_en"], "causa": fila["causa"],
-                "mensaje": fila["mensaje"], "chat_id": fila["chat_id"], "emociones": [],
+                "id": fila["id"], "usuario_id": fila["usuario_id"], "creado_en": fila["creado_en"],
+                "causa": fila["causa"], "mensaje": fila["mensaje"], "chat_id": fila["chat_id"], "emociones": [],
             })
             if fila["fila_id"] is not None:
                 registro["emociones"].append(
@@ -226,56 +302,79 @@ class BaseDeDatos:
 
     def espera(self, chat_id: int) -> int | None:
         """El registro al que le falta la causa, si todavía no venció la espera."""
-        with self._conexion() as con:
-            fila = con.execute(
-                "SELECT registro_id FROM esperas WHERE chat_id = ? AND vence > ?", (chat_id, int(time.time()))
-            ).fetchone()
+        fila = self._uno("SELECT registro_id FROM esperas WHERE chat_id = ? AND vence > ?",
+                         (chat_id, int(time.time())))
         return fila["registro_id"] if fila else None
 
     def quitar_espera(self, chat_id: int) -> None:
         with self._conexion() as con:
             con.execute("DELETE FROM esperas WHERE chat_id = ?", (chat_id,))
 
-    # --- Panel compartido ---------------------------------------------------------------
+    # --- Diarios compartidos -----------------------------------------------------------
 
-    def accesos(self) -> list[dict]:
+    def compartidos_de(self, usuario_id: int) -> list[dict]:
+        """Con quién compartió su diario esta persona."""
         with self._conexion() as con:
-            filas = con.execute("SELECT correo, creado_en FROM accesos ORDER BY creado_en, correo").fetchall()
+            filas = con.execute("SELECT correo, creado_en FROM compartidos WHERE usuario_id = ? "
+                                "ORDER BY creado_en, correo", (usuario_id,)).fetchall()
         return [dict(f) for f in filas]
 
-    def dar_acceso(self, correo: str, creado_en: int) -> None:
+    def compartidos_conmigo(self, correo: str) -> list[dict]:
+        """Los diarios que otras personas compartieron con este correo: [{id, correo}]."""
         with self._conexion() as con:
-            con.execute(
-                "INSERT INTO accesos (correo, creado_en) VALUES (?, ?) ON CONFLICT(correo) DO NOTHING",
-                (correo, creado_en),
-            )
+            filas = con.execute(
+                "SELECT u.id, u.correo FROM compartidos c JOIN usuarios u ON u.id = c.usuario_id "
+                "WHERE c.correo = ? ORDER BY c.creado_en, u.id", (correo,)).fetchall()
+        return [dict(f) for f in filas]
 
-    def quitar_acceso(self, correo: str) -> bool:
+    def compartir(self, usuario_id: int, correo: str, creado_en: int) -> None:
         with self._conexion() as con:
-            return con.execute("DELETE FROM accesos WHERE correo = ?", (correo,)).rowcount > 0
+            con.execute("INSERT INTO compartidos (usuario_id, correo, creado_en) VALUES (?, ?, ?) "
+                        "ON CONFLICT DO NOTHING", (usuario_id, correo, creado_en))
 
-    def tiene_acceso(self, correo: str) -> bool:
+    def dejar_de_compartir(self, usuario_id: int, correo: str) -> bool:
         with self._conexion() as con:
-            return con.execute("SELECT 1 FROM accesos WHERE correo = ?", (correo,)).fetchone() is not None
+            return con.execute("DELETE FROM compartidos WHERE usuario_id = ? AND correo = ?",
+                               (usuario_id, correo)).rowcount > 0
+
+    def puede_ver(self, usuario_id: int, correo: str) -> bool:
+        """¿`usuario_id` compartió su diario con este correo?"""
+        return self._uno("SELECT 1 AS si FROM compartidos WHERE usuario_id = ? AND correo = ?",
+                         (usuario_id, correo)) is not None
+
+    def fue_invitado(self, correo: str) -> bool:
+        return self._uno("SELECT 1 AS si FROM compartidos WHERE correo = ?", (correo,)) is not None
 
     # --- Palabras aprendidas y ajustes -------------------------------------------------
 
-    def aprender(self, palabra: str, emocion: str) -> None:
+    def aprender(self, usuario_id: int, palabra: str, emocion: str) -> None:
         with self._conexion() as con:
             con.execute(
-                "INSERT INTO palabras_aprendidas (palabra, emocion) VALUES (?, ?) "
-                "ON CONFLICT(palabra) DO UPDATE SET emocion = excluded.emocion",
-                (palabra, emocion),
+                "INSERT INTO vocabulario (usuario_id, palabra, emocion) VALUES (?, ?, ?) "
+                "ON CONFLICT(usuario_id, palabra) DO UPDATE SET emocion = excluded.emocion",
+                (usuario_id, palabra, emocion),
             )
 
-    def aprendidas(self) -> dict[str, str]:
+    def vocabulario(self, usuario_id: int) -> dict[str, str]:
         with self._conexion() as con:
-            filas = con.execute("SELECT palabra, emocion FROM palabras_aprendidas").fetchall()
+            filas = con.execute("SELECT palabra, emocion FROM vocabulario WHERE usuario_id = ?",
+                                (usuario_id,)).fetchall()
         return {f["palabra"]: f["emocion"] for f in filas}
 
-    def ajuste(self, clave: str) -> str | None:
+    def adoptar_datos_sin_dueno(self, usuario_id: int) -> None:
+        """Pasa a esta cuenta lo que se guardó antes de que existieran las cuentas.
+        («WHERE true» evita que SQLite confunda el ON CONFLICT con el ON de un JOIN.)"""
         with self._conexion() as con:
-            fila = con.execute("SELECT valor FROM ajustes WHERE clave = ?", (clave,)).fetchone()
+            con.execute("UPDATE registros SET usuario_id = ? WHERE usuario_id IS NULL", (usuario_id,))
+            con.execute("INSERT INTO vocabulario (usuario_id, palabra, emocion) "
+                        "SELECT ?, palabra, emocion FROM palabras_aprendidas WHERE true ON CONFLICT DO NOTHING", (usuario_id,))
+            con.execute("INSERT INTO compartidos (usuario_id, correo, creado_en) "
+                        "SELECT ?, correo, creado_en FROM accesos WHERE true ON CONFLICT DO NOTHING", (usuario_id,))
+            con.execute("DELETE FROM palabras_aprendidas")
+            con.execute("DELETE FROM accesos")
+
+    def ajuste(self, clave: str) -> str | None:
+        fila = self._uno("SELECT valor FROM ajustes WHERE clave = ?", (clave,))
         return fila["valor"] if fila else None
 
     def guardar_ajuste(self, clave: str, valor: str) -> None:

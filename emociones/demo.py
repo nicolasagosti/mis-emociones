@@ -36,13 +36,15 @@ EJEMPLOS = [
 
 
 def sembrar(bd: BaseDeDatos) -> None:
+    usuario_id = bd.crear_usuario()["id"]
     hoy = datetime.now()
     for dias, hora, emociones, causa in EJEMPLOS:
         horas, minutos = map(int, hora.split(":"))
         fecha = (hoy - timedelta(days=dias)).replace(hour=horas, minute=minutos, second=0, microsecond=0)
         filas = [(rueda.EMOCIONES[e].nombre, e) for e in emociones]
         mensaje = f'{", ".join(n for n, _ in filas)}: {causa}'
-        bd.crear_registro(int(fecha.timestamp()), causa, mensaje, None, filas)
+        bd.crear_registro(usuario_id, int(fecha.timestamp()), causa, mensaje, None, filas)
     # Una palabra que el bot todavía no sabe dónde va.
     ayer = int((hoy - timedelta(days=1)).replace(hour=15, minute=0).timestamp())
-    bd.crear_registro(ayer, "Dormí cuatro horas", "Agotado: dormí cuatro horas", None, [("Agotado", None)])
+    bd.crear_registro(usuario_id, ayer, "Dormí cuatro horas", "Agotado: dormí cuatro horas", None,
+                      [("Agotado", None)])

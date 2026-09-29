@@ -203,9 +203,35 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
   max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.compartir { margin-top: 24px; padding-top: 2px; border-top: 1px solid var(--borde); }
-.compartir .explicacion { color: var(--texto-suave); font-size: 0.88rem; margin: 0 0 12px; }
+.franja { max-width: 1280px; margin: 0 auto; padding-inline: 16px; }
+@media (min-width: 700px) { .franja { padding-inline: 28px; } }
+.pestanas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+.contador {
+  display: inline-block; min-width: 1.5em; margin-left: 4px; padding: 0 6px; border-radius: 999px;
+  background: var(--texto); color: var(--tarjeta); font-size: 0.72rem; line-height: 1.6; text-align: center;
+}
+.contador:empty { display: none; }
+.diarios-compartidos { display: flex; flex-wrap: wrap; gap: 6px; }
+.diarios-compartidos button {
+  border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto-suave); cursor: pointer;
+  border-radius: 999px; padding: 5px 12px; font-weight: 600; font-size: 0.85rem;
+}
+.diarios-compartidos button[aria-pressed="true"] { background: var(--texto); border-color: var(--texto); color: var(--tarjeta); }
+.aviso-lectura {
+  margin: 0 0 16px; padding: 10px 16px; border-radius: 12px; background: var(--pista);
+  font-weight: 600; font-size: 0.92rem; overflow-wrap: anywhere;
+}
+.compartidos-vacio { margin-bottom: 48px; }
+
+.compartir, .telegram { margin-top: 24px; padding-top: 2px; border-top: 1px solid var(--borde); }
+.compartir .explicacion, .telegram .explicacion { color: var(--texto-suave); font-size: 0.88rem; margin: 0 0 12px; }
 .compartir .explicacion strong { color: var(--texto); overflow-wrap: anywhere; }
+.telegram-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#telegram-boton, .telegram-abrir {
+  border: 0; border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none;
+  background: #2aabee; color: #fff; font-weight: 700; font-size: 0.92rem;
+}
+#telegram-boton.secundario { background: var(--pista); color: var(--texto); }
 .form-acceso { display: flex; gap: 8px; }
 .form-acceso input {
   flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; font: inherit;

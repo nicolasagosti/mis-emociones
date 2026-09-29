@@ -49,6 +49,33 @@ def verificar(secreto: str, uso: str, valor: str | None, ahora: float | None = N
     return texto
 
 
+def _firma_vinculo(secreto: str, datos: str) -> str:
+    return hmac.new(_clave(secreto, "vincular"), datos.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def firmar_vinculo(secreto: str, usuario_id: int, duracion: int, ahora: float | None = None) -> str:
+    """Código para vincular Telegram con una cuenta, dentro del enlace t.me/<bot>?start=…
+    (Telegram solo acepta ahí letras, números, «_» y «-», hasta 64 caracteres)."""
+    datos = f"{usuario_id}_{int(time.time() if ahora is None else ahora) + duracion}"
+    return f"{datos}_{_firma_vinculo(secreto, datos)}"
+
+
+def verificar_vinculo(secreto: str, valor: str | None, ahora: float | None = None) -> int | None:
+    """La cuenta a vincular, si el código es válido y no venció."""
+    if not secreto or not valor:
+        return None
+    try:
+        usuario, vence, firma = valor.split("_")
+        usuario_id, vencimiento = int(usuario), int(vence)
+    except ValueError:
+        return None
+    if not hmac.compare_digest(firma.encode(), _firma_vinculo(secreto, f"{usuario}_{vence}").encode()):
+        return None
+    if vencimiento < (time.time() if ahora is None else ahora):
+        return None
+    return usuario_id
+
+
 def secreto_webhook(token: str) -> str:
     """Telegram lo manda en cada aviso al webhook; así se sabe que el aviso es auténtico."""
     return hmac.new(token.encode(), b"mis-emociones/webhook", hashlib.sha256).hexdigest()

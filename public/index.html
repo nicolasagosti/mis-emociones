@@ -45,6 +45,21 @@
     </div>
   </section>
 
+  <div class="franja">
+  <nav class="pestanas" id="pestanas" aria-label="Diarios" hidden>
+    <div class="segmentado" role="group">
+      <button type="button" data-pestana="mio">Mi diario</button>
+      <button type="button" data-pestana="compartidos">Compartidos conmigo <span class="contador" id="contador-compartidos"></span></button>
+    </div>
+    <div class="diarios-compartidos" id="diarios-compartidos" hidden></div>
+  </nav>
+  <p class="aviso-lectura" id="aviso-lectura" hidden></p>
+  <div class="vacio compartidos-vacio" id="compartidos-vacio" hidden>
+    <p><strong>Nadie compartió su diario contigo todavía.</strong></p>
+    <p>Cuando alguien lo haga, aparecerá aquí para que puedas verlo.</p>
+  </div>
+  </div>
+
   <main class="contenido" id="contenido" hidden>
     <section class="tarjeta panel-rueda" aria-labelledby="titulo-rueda">
       <div class="fila-titulo">
@@ -52,7 +67,7 @@
         <label class="interruptor">
           <input type="checkbox" id="resaltar" checked>
           <span class="pista-interruptor" aria-hidden="true"></span>
-          Resaltar lo que sentí
+          <span id="texto-resaltar">Resaltar lo que sentí</span>
         </label>
       </div>
       <svg id="rueda" class="rueda resaltar" viewBox="-345 -345 690 690" role="img"
@@ -64,13 +79,14 @@
       <h2 id="titulo-resumen">Resumen</h2>
       <div class="totales" id="totales"></div>
       <div class="barras" id="barras"></div>
-      <h3>Lo que más sentiste</h3>
+      <h3 id="titulo-frecuentes">Lo que más sentiste</h3>
       <ol class="frecuentes" id="frecuentes"></ol>
 
       <section class="compartir" id="compartir" hidden aria-labelledby="titulo-compartir">
-        <h3 id="titulo-compartir">Compartir tu panel</h3>
+        <h3 id="titulo-compartir">Compartir tu diario</h3>
         <p class="explicacion">Quien agregues entra con su cuenta de Google en
-          <strong id="enlace-panel"></strong> y ve tu rueda y tus registros, pero no puede modificarlos.</p>
+          <strong id="enlace-panel"></strong>: tiene su propio diario y ve el tuyo en
+          «Compartidos conmigo», sin poder modificarlo.</p>
         <form class="form-acceso" id="form-acceso">
           <input type="email" id="correo-acceso" placeholder="correo@gmail.com" required
                  autocomplete="off" aria-label="Correo de Google de la persona">
@@ -78,6 +94,15 @@
         </form>
         <p class="aviso-acceso" id="aviso-acceso" role="status" hidden></p>
         <ul class="accesos" id="accesos"></ul>
+      </section>
+
+      <section class="telegram" id="telegram" hidden aria-labelledby="titulo-telegram">
+        <h3 id="titulo-telegram">Telegram</h3>
+        <p class="explicacion" id="telegram-estado"></p>
+        <div class="telegram-acciones">
+          <button type="button" id="telegram-boton"></button>
+          <a class="telegram-abrir" id="telegram-abrir" target="_blank" rel="noopener" hidden>Abrir Telegram para vincular</a>
+        </div>
       </section>
     </aside>
 
@@ -97,8 +122,8 @@
       <div class="diario" id="diario" hidden></div>
       <div class="vacio" id="vacio" hidden>
         <p><strong>Todavía no hay registros en este período.</strong></p>
-        <p>Escríbele a tu bot de Telegram cómo te sientes y qué lo causó, por ejemplo:</p>
-        <p><code>Frustrado, ansioso: mi jefe cambió la fecha de entrega</code></p>
+        <p class="solo-propio">Escríbele a tu bot de Telegram cómo te sientes y qué lo causó, por ejemplo:</p>
+        <p class="solo-propio"><code>Frustrado, ansioso: mi jefe cambió la fecha de entrega</code></p>
       </div>
     </section>
   </main>

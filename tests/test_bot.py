@@ -4,7 +4,11 @@ import unittest
 
 from emociones import sesion
 from emociones.bot import Bot
+from emociones.config import Configuracion
 from tests.utiles import nueva_bd
+
+CON_GOOGLE = dict(url_publica="https://emociones.example", token="123:token", google_id="cliente",
+                  google_secreto="secreto", google_correos={"yo@gmail.com"})
 
 
 class APIFalsa:
@@ -15,7 +19,7 @@ class APIFalsa:
 
     def llamar(self, metodo, espera=30, **parametros):
         self.llamadas.append((metodo, parametros))
-        return True
+        return {"username": "emociones_bot"} if metodo == "getMe" else True
 
     def enviar(self, chat_id, texto, teclado=None):
         self.enviados.append((texto, teclado))
@@ -35,12 +39,14 @@ def botones(teclado):
     return [boton["callback_data"] for fila in teclado or [] for boton in fila]
 
 
-class TestBot(unittest.TestCase):
+class Ayudantes:
+    """Arma el bot y simula mensajes y botones de Telegram."""
+
     def setUp(self):
         self.carpeta = tempfile.TemporaryDirectory()
         self.bd = nueva_bd(self.carpeta.name)
         self.api = APIFalsa()
-        self.bot = Bot(self.api, self.bd, url_panel="https://emociones.example", clave="123:token")
+        self.bot = Bot(self.api, self.bd, Configuracion(url_publica="https://emociones.example", token="123:token"))
 
     def tearDown(self):
         self.carpeta.cleanup()
@@ -57,8 +63,12 @@ class TestBot(unittest.TestCase):
             "message": {"message_id": 1, "chat": {"id": usuario}},
         }})
 
-    def registros(self):
-        return self.bd.listar_registros()
+    def registros(self, telegram_id=7):
+        usuario = self.bd.usuario_por_telegram(telegram_id)
+        return self.bd.listar_registros(usuario["id"]) if usuario else []
+
+
+class TestBot(Ayudantes, unittest.TestCase):
 
     def test_registra_emociones_y_causa(self):
         self.escribir("Frustrado, ansioso: mi jefe cambió la fecha de entrega")
@@ -172,7 +182,7 @@ class TestBot(unittest.TestCase):
         self.assertIn("privado", self.api.enviados[-1][0])
 
     def test_usuarios_permitidos(self):
-        bot = Bot(self.api, self.bd, permitidos={99})
+        bot = Bot(self.api, self.bd, Configuracion(permitidos={99}))
         bot.procesar({"update_id": 1, "message": {
             "message_id": 1, "date": int(time.time()), "text": "triste: llueve",
             "chat": {"id": 7, "type": "private"}, "from": {"id": 7},
@@ -207,6 +217,77 @@ class TestBot(unittest.TestCase):
         self.assertIn("Frustrado (2)", texto)
         self.escribir("/rueda")
         self.assertIn("Sin valor", self.api.enviados[-1][0])
+
+
+
+class TestBotConCuentas(Ayudantes, unittest.TestCase):
+    """Con inicio de sesión en la web: cada Telegram se vincula con una cuenta desde la app."""
+
+    def setUp(self):
+        super().setUp()
+        self.bot = Bot(self.api, self.bd, Configuracion(**CON_GOOGLE))
+        self.yo = self.bd.crear_usuario(correo="yo@gmail.com")
+
+    def vincular(self, usuario, telegram_id=7):
+        self.escribir(f"/start {sesion.firmar_vinculo('123:token', usuario['id'], 600)}", telegram_id)
+
+    def test_sin_vincular_explica_como_hacerlo(self):
+        self.escribir("triste: llueve")
+        self.assertIn("Vincular Telegram", self.api.enviados[-1][0])
+        self.assertEqual(self.registros(), [])
+
+    def test_vincular_desde_la_app(self):
+        self.vincular(self.yo)
+        self.assertIn("vinculado a <b>yo@gmail.com</b>", self.api.enviados[-1][0])
+        self.escribir("triste: llueve")
+        [registro] = self.bd.listar_registros(self.yo["id"])
+        self.assertEqual(registro["causa"], "Llueve")
+
+    def test_codigo_vencido_o_falso(self):
+        for codigo in (sesion.firmar_vinculo("123:token", self.yo["id"], -1), "1_2_falso", "basura"):
+            self.escribir(f"/start {codigo}")
+            self.assertIn("venció o no es válido", self.api.enviados[-1][0])
+        self.assertIsNone(self.bd.usuario_por_telegram(7))
+
+    def test_un_telegram_no_se_vincula_a_dos_cuentas(self):
+        otra = self.bd.crear_usuario(correo="otra@gmail.com")
+        self.vincular(self.yo)
+        self.vincular(otra)
+        self.assertIn("ya está vinculado a otra cuenta", self.api.enviados[-1][0])
+        self.assertEqual(self.bd.usuario_por_telegram(7)["id"], self.yo["id"])
+
+    def test_vincular_suma_los_registros_de_una_cuenta_sin_correo(self):
+        vieja = self.bd.crear_usuario(telegram_id=7)
+        self.bd.crear_registro(vieja["id"], 1000, "Llueve", None, 7, [("triste", "tristeza")])
+        self.vincular(self.yo)
+        self.assertIn("se sumaron", self.api.enviados[-1][0])
+        self.assertEqual([r["causa"] for r in self.bd.listar_registros(self.yo["id"])], ["Llueve"])
+
+    def test_cada_persona_tiene_su_diario(self):
+        otra = self.bd.crear_usuario(correo="otra@gmail.com")
+        self.vincular(self.yo, 7)
+        self.vincular(otra, 8)
+        self.escribir("triste: llueve", 7)
+        self.escribir("feliz: gané el partido", 8)
+        self.assertEqual([r["causa"] for r in self.bd.listar_registros(self.yo["id"])], ["Llueve"])
+        self.assertEqual([r["causa"] for r in self.bd.listar_registros(otra["id"])], ["Gané el partido"])
+        self.escribir("/hoy", 8)
+        self.assertNotIn("Llueve", self.api.enviados[-1][0])
+        # Los botones de un registro ajeno no hacen nada.
+        registro_ajeno = self.bd.listar_registros(self.yo["id"])[0]["id"]
+        self.tocar(f"r:{registro_ajeno}:D", 8)
+        self.assertEqual(self.api.avisos[-1], "Ese registro ya no existe.")
+        self.assertIsNotNone(self.bd.obtener_registro(registro_ajeno))
+
+    def test_palabras_aprendidas_por_persona(self):
+        otra = self.bd.crear_usuario(correo="otra@gmail.com")
+        self.vincular(self.yo, 7)
+        self.vincular(otra, 8)
+        self.escribir("agotado: mucho trabajo", 7)
+        fila = self.bd.listar_registros(self.yo["id"])[0]["emociones"][0]
+        self.tocar(f'f:{fila["id"]}:e:tristeza/deprimido', 7)
+        self.assertEqual(self.bd.vocabulario(self.yo["id"]), {"agotado": "tristeza/deprimido"})
+        self.assertEqual(self.bd.vocabulario(otra["id"]), {})
 
 
 if __name__ == "__main__":

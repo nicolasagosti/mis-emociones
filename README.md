@@ -5,6 +5,9 @@ aplicación acomoda cada emoción en su lugar de **la rueda de los sentimientos*
 1982; versión en español de @anabelcornago / Dr. Megan Anna Neff). Un panel web muestra la rueda
 con tus emociones resaltadas y tus registros ordenados por categoría.
 
+Cada persona tiene **su propio diario** y puede compartirlo en solo lectura (por ejemplo, con su
+psicóloga): quien lo recibe lo ve en la pestaña **Compartidos conmigo**, junto a su propio diario.
+
 Funciona en **Vercel** (siempre disponible, desde cualquier dispositivo) o **en tu computadora**.
 
 ## En línea: <https://mis-emociones-one.vercel.app>
@@ -30,9 +33,10 @@ dirección (el bot sigue conectado a la versión principal).
    | `TELEGRAM_USUARIOS` | opcional: tu ID de Telegram (te lo dice [@userinfobot](https://t.me/userinfobot)) |
 
    Vuelve a publicar (paso 2) y **abre la página una vez**: eso conecta el bot con Telegram.
-5. **Escríbele a tu bot** para quedar como dueño.
-6. **Inicio de sesión con Google** (ver abajo). Mientras no lo configures, puedes entrar enviándole
-   `/panel` al bot: te responde con un enlace para abrir el panel.
+5. **Configura el inicio de sesión con Google** (ver abajo).
+6. **Entra con Google y toca «Vincular Telegram»**: se abre el bot, tocas *Iniciar* y desde ese
+   momento lo que le escribas va a tu diario. Cada persona vincula su propio Telegram; el bot es
+   uno solo para todas.
 
 ### Inicio de sesión con Google
 
@@ -53,33 +57,36 @@ dirección (el bot sigue conectado a la versión principal).
    | --- | --- |
    | `GOOGLE_CLIENT_ID` | el ID de cliente (termina en `.apps.googleusercontent.com`) |
    | `GOOGLE_CLIENT_SECRET` | el secreto (empieza con `GOCSPX-`) |
-   | `GOOGLE_CORREOS` | tu Gmail; si son varios, separados por coma |
+   | `GOOGLE_CORREOS` | tu Gmail (las cuentas que pueden entrar sin que nadie las invite) |
 
 6. Vuelve a publicar. En la página aparece **Entrar con Google**.
 
-### Compartir el panel (por ejemplo, con tu psicóloga)
+### Compartir tu diario (por ejemplo, con tu psicóloga)
 
 1. **Una sola vez**, en Google Cloud: *Google Auth Platform* → **Audience** → **Publish app**.
-   Así cualquier cuenta de Google puede pasar por la pantalla de Google; igual solo entran los
-   correos que tú autorices. Como la app solo pide el correo, Google no exige verificarla.
+   Así cualquier cuenta de Google puede pasar por la pantalla de Google; igual solo entran las
+   personas invitadas. Como la app solo pide el correo, Google no exige verificarla.
    (Si prefieres dejarla "en prueba", agrega a cada persona también como *Test user*.)
-2. En tu panel, en **Compartir tu panel**, escribe su correo de Google y toca **Dar acceso**.
-3. Envíale el enlace del panel: entra con **Entrar con Google** y ve tu rueda y tus registros en
-   **solo lectura** (no puede borrar nada ni compartirlo con otras personas).
-4. Para dejar de compartir, toca **Quitar**: pierde el acceso en el acto.
+2. En **Mi diario** → **Compartir tu diario**, escribe su correo de Google y toca **Dar acceso**.
+3. Envíale el enlace de la app. Entra con **Entrar con Google** y tiene **su propio diario** (y
+   puede vincular su Telegram); el tuyo lo ve en **Compartidos conmigo**, en solo lectura.
+4. Para dejar de compartir, toca **Quitar**: deja de ver tu diario en el acto (su cuenta sigue).
 
-### Seguridad
-- El panel está en internet, así que para ver tus datos hay que iniciar sesión: con Google o con
-  el enlace de `/panel` (firmado, vence en 10 minutos; solo el dueño del bot puede pedirlo).
-  La sesión dura 30 días en ese navegador.
-- Hay dos roles: **dueño** (los correos de `GOOGLE_CORREOS` y el dueño del bot) y **solo
-  lectura** (las personas con las que compartes el panel). Los permisos se revisan en cada
-  pedido, así que quitar un acceso tiene efecto inmediato.
+### Cuentas y seguridad
+- Pueden crear cuenta los correos de `GOOGLE_CORREOS` y las personas con las que alguien
+  compartió su diario. Nadie más puede entrar, aunque tenga el enlace.
+- Cada persona ve y modifica solo su diario; los compartidos son de solo lectura. Los permisos se
+  revisan en cada pedido, así que dejar de compartir tiene efecto inmediato.
+- Para entrar: con Google, o con el enlace que manda el bot con `/panel` (firmado, vence en 10
+  minutos). La sesión dura 30 días en ese navegador.
 - El inicio con Google usa el flujo estándar con `state` y PKCE, y valida que la cuenta de Google
   sea para esta app, esté vigente y tenga el correo verificado.
-- El bot queda para la primera persona que le escribe. Escríbele apenas lo conectes, o fija tu ID
-  en `TELEGRAM_USUARIOS`.
+- El enlace de «Vincular Telegram» está firmado y vence en 10 minutos. Un Telegram solo puede
+  estar vinculado a una cuenta. Con `TELEGRAM_USUARIOS` limitas qué Telegrams pueden usar el bot.
 - Telegram firma cada aviso que manda al webhook y la aplicación rechaza los que no traen la firma.
+- Si usabas la versión anterior (con un solo dueño): tus registros, las palabras que le enseñaste
+  al bot y con quién compartías pasan a tu cuenta la primera vez que entras con el correo de
+  `GOOGLE_CORREOS`. Si ahí hay varios correos, pasan a la cuenta desde la que vincules tu Telegram.
 
 ## Usarla en tu computadora
 
@@ -90,7 +97,8 @@ cp .env.example .env     # y pega el token en TELEGRAM_TOKEN=
 python3 main.py
 ```
 
-Escríbele a tu bot y abre el panel en <http://localhost:8000> (en tu computadora no pide entrar).
+Escríbele a tu bot y abre el panel en <http://localhost:8000> (en tu computadora no pide entrar
+y hay una sola cuenta: la de la primera persona que le escribe al bot).
 Para ver el panel sin configurar nada: `python3 main.py --demo` (datos de ejemplo, en una base aparte).
 
 Un bot atiende en un solo lugar a la vez: si ya lo conectaste a Vercel, antes de usarlo en tu

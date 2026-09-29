@@ -1,18 +1,23 @@
 """Panel web y API. El mismo código atiende en tu computadora (main.py) y en Vercel (api/index.py).
 
+Cada persona entra con su cuenta y ve su propio diario; los diarios que otras personas le
+compartieron los ve en solo lectura.
+
 Rutas:
-    GET    /api/estado          qué está configurado y si hay sesión (público, sin datos personales)
-    GET    /api/rueda           la rueda de los sentimientos (público)
-    GET    /api/registros       tus registros (requiere sesión fuera de tu computadora)
-    DELETE /api/registros/<id>  borrar un registro (solo el dueño)
-    GET    /api/accesos         con quién compartiste el panel (solo el dueño)
-    POST   /api/accesos         compartir con un correo de Google: {"correo": "…"} (solo el dueño)
-    DELETE /api/accesos/<correo>  dejar de compartir (solo el dueño)
-    POST   /api/telegram        webhook del bot (solo Telegram, con su clave secreta)
-    GET    /auth/google         lleva a Google para elegir la cuenta
-    GET    /auth/google/callback  Google vuelve aquí: si el correo está autorizado, abre la sesión
-    GET    /entrar?t=…          enlace que manda /panel: abre la sesión
-    GET    /salir               cierra la sesión
+    GET    /api/estado                 qué está configurado y quién entró (sin datos del diario)
+    GET    /api/rueda                  la rueda de los sentimientos (público)
+    GET    /api/registros[?diario=id]  tu diario, o uno que te compartieron
+    DELETE /api/registros/<id>         borrar un registro de tu diario
+    GET    /api/accesos                con quién compartiste tu diario
+    POST   /api/accesos                compartirlo con un correo de Google: {"correo": "…"}
+    DELETE /api/accesos/<correo>       dejar de compartirlo
+    POST   /api/telegram/vincular      enlace para vincular tu Telegram (vence en 10 minutos)
+    POST   /api/telegram/desvincular   desvincular tu Telegram
+    POST   /api/telegram               webhook del bot (solo Telegram, con su clave secreta)
+    GET    /auth/google                lleva a Google para elegir la cuenta
+    GET    /auth/google/callback       Google vuelve aquí: si la cuenta puede entrar, abre la sesión
+    GET    /entrar?t=…                 enlace que manda /panel: abre la sesión
+    GET    /salir                      cierra la sesión
 """
 
 from __future__ import annotations
@@ -27,9 +32,9 @@ from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import google, rueda, sesion
+from . import cuentas, google, rueda, sesion
 from .bd import BaseDeDatos
-from .bot import Bot, conectar_webhook, es_dueno
+from .bot import DURACION_VINCULO, Bot, conectar_webhook
 from .config import LOCALES, RAIZ, Configuracion
 from .telegram import ErrorTelegram
 
@@ -50,11 +55,9 @@ SEGURIDAD = {
 MAX_AVISO = 1_000_000  # bytes aceptados en un aviso de Telegram
 CORREO = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
 
-# Roles: el dueño ve y modifica todo; con quien compartes el panel solo puede verlo.
-DUENO, LECTURA = "dueno", "lectura"
-
-# Webhooks que esta instancia ya registró en Telegram (en Vercel, una vez por instancia).
+# Lo que esta instancia ya le preguntó a Telegram (en Vercel, una vez por instancia).
 _webhooks_conectados: set[str] = set()
+_nombres_de_bot: dict[str, str] = {}  # token → usuario del bot, para los enlaces t.me/…
 
 
 class Panel(BaseHTTPRequestHandler):
@@ -86,14 +89,12 @@ class Panel(BaseHTTPRequestHandler):
         elif url.path == "/api/rueda":
             self._json(rueda.como_json())
         elif url.path == "/api/registros":
-            bd = self._bd_para(LECTURA)
-            if bd:
-                desde = consulta.get("desde", [""])[0]
-                self._json({"registros": bd.listar_registros(desde=int(desde) if desde.isdigit() else None)})
+            self._registros(consulta)
         elif url.path == "/api/accesos":
-            bd = self._bd_para(DUENO)
-            if bd:
-                self._json({"accesos": bd.accesos()})
+            atendible = self._con_cuenta()
+            if atendible:
+                bd, usuario = atendible
+                self._json({"accesos": bd.compartidos_de(usuario["id"])})
         elif url.path == "/auth/google":
             self._google_ida()
         elif url.path == "/auth/google/callback":
@@ -113,8 +114,19 @@ class Panel(BaseHTTPRequestHandler):
         ruta = urlsplit(self.path).path
         if ruta == "/api/telegram":
             self._webhook()
-        elif ruta == "/api/accesos":
-            self._compartir()
+        elif ruta in ("/api/accesos", "/api/telegram/vincular", "/api/telegram/desvincular"):
+            if not self._mismo_origen():
+                return
+            atendible = self._con_cuenta()
+            if atendible is None:
+                return
+            if ruta == "/api/accesos":
+                self._compartir(*atendible)
+            elif ruta == "/api/telegram/vincular":
+                self._enlace_para_vincular(atendible[1])
+            else:
+                atendible[0].vincular_telegram(atendible[1]["id"], None)
+                self._json({"ok": True})
         else:
             self._error(404)
 
@@ -125,24 +137,47 @@ class Panel(BaseHTTPRequestHandler):
             return
         if not self._mismo_origen():
             return
-        bd = self._bd_para(DUENO)
-        if bd is None:
+        atendible = self._con_cuenta()
+        if atendible is None:
             return
+        bd, usuario = atendible
         if partes[1] == "registros":
-            borrado = partes[2].isdigit() and bd.borrar_registro(int(partes[2]))
+            registro = bd.obtener_registro(int(partes[2])) if partes[2].isdigit() else None
+            # Solo se borra de tu propio diario.
+            borrado = registro is not None and registro["usuario_id"] == usuario["id"]
+            if borrado:
+                bd.borrar_registro(registro["id"])
         else:
-            borrado = bd.quitar_acceso(unquote(partes[2]).strip().lower())
+            borrado = bd.dejar_de_compartir(usuario["id"], unquote(partes[2]).strip().lower())
         if borrado:
             self._enviar(204, b"", "text/plain")
         else:
             self._error(404)
 
-    def _compartir(self) -> None:
-        if not self._mismo_origen():
-            return
-        bd = self._bd_para(DUENO)
+    # --- Diarios -----------------------------------------------------------------------
+
+    def _registros(self, consulta: dict[str, list[str]]) -> None:
+        bd = self._bd()
         if bd is None:
+            self._error(503)
             return
+        usuario = self._usuario(bd)
+        if usuario is None and self.config.requiere_sesion:
+            self._error(401)
+            return
+        diario = consulta.get("diario", [""])[0]
+        if not diario or (usuario and diario == str(usuario["id"])):
+            dueno_id = usuario["id"] if usuario else None
+        elif diario.isdigit() and usuario and usuario["correo"] and bd.puede_ver(int(diario), usuario["correo"]):
+            dueno_id = int(diario)  # un diario que te compartieron (solo lectura)
+        else:
+            self._error(403)
+            return
+        desde = consulta.get("desde", [""])[0]
+        registros = bd.listar_registros(dueno_id, desde=int(desde) if desde.isdigit() else None) if dueno_id else []
+        self._json({"registros": registros})
+
+    def _compartir(self, bd: BaseDeDatos, usuario: dict) -> None:
         if not self.headers.get("Content-Type", "").startswith("application/json"):
             self._error(415)
             return
@@ -155,30 +190,25 @@ class Panel(BaseHTTPRequestHandler):
         if not CORREO.match(correo) or len(correo) > 254:
             self._error(400)
             return
-        if correo not in self.config.google_correos:  # los dueños ya tienen acceso completo
-            bd.dar_acceso(correo, int(time.time()))
-            log.info("Panel compartido con %s", correo)
-        self._json({"accesos": bd.accesos()})
+        if correo != usuario["correo"]:
+            bd.compartir(usuario["id"], correo, int(time.time()))
+            log.info("La cuenta %s compartió su diario con %s", usuario["id"], correo)
+        self._json({"accesos": bd.compartidos_de(usuario["id"])})
 
-    # --- Sesión y configuración -------------------------------------------------------
+    def _enlace_para_vincular(self, usuario: dict) -> None:
+        cfg = self.config
+        if not cfg.token:
+            self._error(503)
+            return
+        if cfg.token not in _nombres_de_bot:
+            _nombres_de_bot[cfg.token] = cfg.api(cfg.token).llamar("getMe")["username"]
+        codigo = sesion.firmar_vinculo(cfg.clave_sesion, usuario["id"], DURACION_VINCULO)
+        self._json({"enlace": f"https://t.me/{_nombres_de_bot[cfg.token]}?start={codigo}"})
+
+    # --- Cuentas y sesión --------------------------------------------------------------
 
     def _bd(self) -> BaseDeDatos | None:
         return BaseDeDatos(self.config.base_de_datos) if self.config.base_de_datos else None
-
-    def _bd_para(self, rol_necesario: str) -> BaseDeDatos | None:
-        """La base de datos, si la sesión alcanza para `rol_necesario`; si no, responde el error."""
-        bd = self._bd()
-        if bd is None:
-            self._error(503)
-            return None
-        _, rol = self._sesion(bd)
-        if rol is None:
-            self._error(401)
-        elif rol_necesario == DUENO and rol != DUENO:
-            self._error(403)
-        else:
-            return bd
-        return None
 
     def _cookies(self) -> SimpleCookie:
         cookies = SimpleCookie()
@@ -188,25 +218,32 @@ class Panel(BaseHTTPRequestHandler):
             pass
         return cookies
 
-    def _sesion(self, bd: BaseDeDatos | None) -> tuple[str | None, str | None]:
-        """(quién entró: «t:<id>» o «g:<correo>», su rol) según la cookie del navegador."""
+    def _usuario(self, bd: BaseDeDatos | None) -> dict | None:
+        """La cuenta de quien pide, según su cookie de sesión. Se revisa en cada pedido."""
+        if bd is None:
+            return None
         if not self.config.requiere_sesion:
-            return None, DUENO  # en tu computadora no hace falta entrar
+            return bd.primer_usuario()  # en tu computadora no hace falta entrar
         cookie = self._cookies().get("sesion")
         sujeto = sesion.verificar(self.config.clave_sesion, "sesion", cookie.value if cookie else None)
-        rol = self._rol_de(bd, sujeto)
-        return (sujeto, rol) if rol else (None, None)
-
-    def _rol_de(self, bd: BaseDeDatos | None, sujeto: str | None) -> str | None:
-        """Se revisa en cada pedido: si le quitas el acceso a alguien, su sesión deja de valer."""
         tipo, _, valor = (sujeto or "").partition(":")
-        if tipo == "t" and valor.isdigit() and bd is not None and es_dueno(bd, self.config.permitidos, int(valor)):
-            return DUENO
-        if tipo == "g" and valor in self.config.google_correos:
-            return DUENO
-        if tipo == "g" and bd is not None and bd.tiene_acceso(valor):
-            return LECTURA
+        if tipo == "g":
+            return cuentas.usuario_para_correo(bd, self.config, valor)
+        if tipo == "t" and valor.isdigit():
+            return cuentas.usuario_para_telegram(bd, self.config, int(valor))
         return None
+
+    def _con_cuenta(self) -> tuple[BaseDeDatos, dict] | None:
+        """(base de datos, tu cuenta) o, si no se puede, responde el error y devuelve None."""
+        bd = self._bd()
+        if bd is None:
+            self._error(503)
+            return None
+        usuario = self._usuario(bd)
+        if usuario is None:
+            self._error(401)
+            return None
+        return bd, usuario
 
     def _mismo_origen(self) -> bool:
         """Los cambios solo se aceptan desde la propia página (defensa extra contra CSRF)."""
@@ -224,13 +261,17 @@ class Panel(BaseHTTPRequestHandler):
                 bd = BaseDeDatos(cfg.base_de_datos)
             except Exception:
                 log.exception("No pude conectar con la base de datos")
-        sujeto, rol = self._sesion(bd)
+        usuario = self._usuario(bd)
         return {
             "requiere_sesion": cfg.requiere_sesion,
-            "sesion": rol is not None,
-            "rol": rol,
-            # Con qué cuenta entró (se muestra en la cabecera del panel).
-            "cuenta": sujeto[2:] if sujeto and sujeto.startswith("g:") else ("Telegram" if sujeto else None),
+            "sesion": usuario is not None or not cfg.requiere_sesion,
+            "cuenta": {
+                "id": usuario["id"],
+                "correo": usuario["correo"],
+                "telegram": usuario["telegram_id"] is not None,
+            } if usuario else None,
+            # Los diarios que otras personas compartieron contigo: [{id, correo}].
+            "compartidos": bd.compartidos_conmigo(usuario["correo"]) if usuario and usuario["correo"] else [],
             "url": cfg.url_publica,
             "vercel": cfg.en_vercel,
             "base_de_datos": bd is not None,
@@ -265,10 +306,12 @@ class Panel(BaseHTTPRequestHandler):
         return "conectado"
 
     def _entrar(self, firma: str) -> None:
-        """El enlace de /panel: solo lo genera el bot, para el dueño."""
+        """El enlace de /panel: lo genera el bot para quien tiene su Telegram vinculado."""
         bd = self._bd()
-        sujeto = sesion.verificar(self.config.clave_sesion, "entrar", firma)
-        if not (sujeto or "").startswith("t:") or self._rol_de(bd, sujeto) != DUENO:
+        sujeto = sesion.verificar(self.config.clave_sesion, "entrar", firma) or ""
+        tipo, _, valor = sujeto.partition(":")
+        if bd is None or tipo != "t" or not valor.isdigit() or \
+                cuentas.usuario_para_telegram(bd, self.config, int(valor)) is None:
             self._pagina(403, "El enlace venció o no es válido",
                          "Pídele uno nuevo a tu bot de Telegram con el comando /panel.")
             return
@@ -308,10 +351,12 @@ class Panel(BaseHTTPRequestHandler):
             log.warning("No se pudo iniciar sesión con Google: %s", error)
             self._pagina(403, "No pude verificar tu cuenta de Google", "Vuelve a intentarlo en un momento.", borrar)
             return
-        if self._rol_de(self._bd(), f"g:{correo}") is None:
-            log.warning("Intento de entrar con una cuenta de Google no autorizada: %s", correo)
-            self._pagina(403, "Esta cuenta no tiene acceso",
-                         f"{correo} no está autorizada para ver este panel.", borrar)
+        bd = self._bd()
+        if bd is None or cuentas.usuario_para_correo(bd, cfg, correo) is None:
+            log.warning("Intento de entrar con una cuenta de Google sin invitación: %s", correo)
+            self._pagina(403, "Esta cuenta todavía no tiene acceso",
+                         f"{correo} no está invitada. Pídele a alguien que use la app que comparta "
+                         "su diario con este correo.", borrar)
             return
         self._abrir_sesion(f"g:{correo}", borrar)
 
@@ -349,9 +394,7 @@ class Panel(BaseHTTPRequestHandler):
             return
         try:
             with bd.abierta():
-                bot = Bot(cfg.api(cfg.token), bd, cfg.permitidos, url_panel=cfg.url_publica,
-                          clave=cfg.clave_sesion, zona=cfg.zona)
-                bot.procesar(novedad)
+                Bot(cfg.api(cfg.token), bd, cfg).procesar(novedad)
         except Exception:
             # Se responde 200 igual: si Telegram reintentara, podría duplicar el registro.
             log.exception("Error al procesar un aviso de Telegram")
@@ -423,7 +466,7 @@ class Panel(BaseHTTPRequestHandler):
 
 
 def manejador(config: Configuracion) -> type[Panel]:
-    """Una clase de Panel con su configuración (Vercel busca una variable `handler` así)."""
+    """Una clase de Panel con su configuración (para el servidor de tu computadora)."""
     return type("handler", (Panel,), {"config": config})
 
 
