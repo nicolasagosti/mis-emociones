@@ -150,6 +150,8 @@ al nombre original cuando quieras (el lápiz ✎ del panel de la emoción la abr
 
 - **La rueda** tal como en la imagen, con colores más intensos. Lo que sentiste en el período
   elegido queda resaltado y con la cantidad de veces; el resto se atenúa (se puede apagar).
+- Elige el período: hoy, 7 días, 30 días, todo o **un día** en particular (con el calendario o
+  las flechas ‹ › para pasar al día anterior o al siguiente).
 - **Resumen** por categoría y las emociones más frecuentes.
 - **Tus registros** en columnas por categoría o como diario cronológico.
 - Toca una emoción o una categoría (en la rueda o en las barras) para filtrar tus registros;

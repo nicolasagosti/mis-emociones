@@ -75,6 +75,8 @@ class TestPanelLocal(ServidorDePrueba):
         nuevo, _ = self.bd.crear_registro(usuario, 2_000, "nuevo", None, None, [("feliz", "felicidad")])
         _, _, cuerpo = self.pedir("/api/registros?desde=1500")
         self.assertEqual([r["id"] for r in json.loads(cuerpo)["registros"]], [nuevo])
+        _, _, cuerpo = self.pedir("/api/registros?desde=500&hasta=2000")  # un día: sin incluir el siguiente
+        self.assertEqual([r["id"] for r in json.loads(cuerpo)["registros"]], [viejo])
         self.assertEqual(self.pedir(f"/api/registros/{viejo}", "DELETE")[0], 204)
         self.assertEqual(self.pedir(f"/api/registros/{viejo}", "DELETE")[0], 404)
 

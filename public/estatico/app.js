@@ -10,7 +10,8 @@ const estado = {
   nombres: {}, // {emocion: nombre} de ese diario
   registros: [],
   firma: '',
-  periodo: leer('periodo', '7'),
+  periodo: leer('periodo', '7'), // 'hoy', '7', '30', 'todo' o 'dia'
+  dia: leer('dia', ''), // con 'dia': el que elegiste, como 2026-09-29 (se valida al iniciar)
   vista: leer('vista', 'categorias'),
   resaltar: leer('resaltar', '1') === '1',
   filtro: null, // { tipo: 'categoria' | 'emocion', id, nombre }
@@ -54,6 +55,14 @@ const info = (fila) => estado.rueda.emociones[fila.emocion];
 const esSuNombre = (palabra, datos) => [datos.nombre, datos.original]
   .some((nombre) => normalizar(palabra).startsWith(normalizar(nombre).slice(0, -1)));
 const categoria = (id) => estado.rueda.categorias.find((c) => c.id === id);
+
+// Un día como 2026-09-29, en tu zona horaria.
+const fechaISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const hoyISO = () => fechaISO(new Date());
+function diaComoFecha(iso, sumar = 0) {
+  const [anio, mes, dia] = iso.split('-').map(Number);
+  return new Date(anio, mes - 1, dia + sumar); // medianoche de ese día (o de `sumar` días después)
+}
 
 const formatoDia = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' });
 const formatoCorto = new Intl.DateTimeFormat('es', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -459,16 +468,42 @@ function dibujar() {
   if (estado.vista === 'categorias') dibujarTablero(registros);
   else dibujarDiario(registros);
 
-  for (const boton of document.querySelectorAll('#periodos button')) {
-    boton.setAttribute('aria-pressed', String(boton.dataset.periodo === estado.periodo));
-  }
+  dibujarPeriodo();
   for (const boton of document.querySelectorAll('#vistas button')) {
     boton.setAttribute('aria-pressed', String(boton.dataset.vista === estado.vista));
   }
 }
 
+function dibujarPeriodo() {
+  for (const boton of document.querySelectorAll('#periodos button')) {
+    boton.setAttribute('aria-pressed', String(boton.dataset.periodo === estado.periodo));
+  }
+  const unDia = estado.periodo === 'dia';
+  $('#elegir-dia').hidden = !unDia;
+  $('#dia-elegido').max = hoyISO();
+  $('#dia-elegido').value = estado.dia;
+  $('#dia-siguiente').disabled = estado.dia >= hoyISO();
+  $('#texto-vacio').textContent = unDia ? 'No hay registros ese día.' : 'Todavía no hay registros en este período.';
+}
+
+function elegirPeriodo(periodo) {
+  estado.periodo = periodo;
+  guardar('periodo', periodo);
+  estado.firma = '';
+  dibujarPeriodo();
+  cargarRegistros();
+}
+
+function elegirDia(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || Number.isNaN(diaComoFecha(iso).getTime())) return;
+  estado.dia = iso > hoyISO() ? hoyISO() : iso; // no hay registros en el futuro
+  guardar('dia', estado.dia);
+  elegirPeriodo('dia');
+}
+
 function desde() {
   if (estado.periodo === 'todo') return null;
+  if (estado.periodo === 'dia') return Math.floor(diaComoFecha(estado.dia).getTime() / 1000);
   if (estado.periodo === 'hoy') {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -477,11 +512,17 @@ function desde() {
   return Math.floor(Date.now() / 1000) - Number(estado.periodo) * 86400;
 }
 
+// Hasta cuándo (sin incluirlo): solo al ver un día, la medianoche del siguiente.
+function hasta() {
+  return estado.periodo === 'dia' ? Math.floor(diaComoFecha(estado.dia, 1).getTime() / 1000) : null;
+}
+
 async function cargarRegistros() {
   const inicio = desde();
   try {
     const parametros = new URLSearchParams();
     if (inicio !== null) parametros.set('desde', inicio);
+    if (hasta() !== null) parametros.set('hasta', hasta());
     if (estado.diario) parametros.set('diario', estado.diario.id);
     const respuesta = await fetch(`/api/registros?${parametros}`);
     if (respuesta.status === 401 || respuesta.status === 503) {
@@ -508,14 +549,19 @@ async function cargarRegistros() {
 }
 
 function conectarControles() {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(estado.dia) || estado.dia > hoyISO()) estado.dia = hoyISO();
   $('#periodos').addEventListener('click', (e) => {
     const boton = e.target.closest('button');
     if (!boton) return;
-    estado.periodo = boton.dataset.periodo;
-    guardar('periodo', estado.periodo);
-    estado.firma = '';
-    cargarRegistros();
+    elegirPeriodo(boton.dataset.periodo);
+    if (boton.dataset.periodo !== 'dia') return;
+    try {
+      $('#dia-elegido').showPicker(); // abre el calendario para elegir el día
+    } catch { /* sin calendario emergente: queda el campo con la fecha */ }
   });
+  $('#dia-elegido').addEventListener('change', (e) => elegirDia(e.target.value));
+  $('#dia-anterior').addEventListener('click', () => elegirDia(fechaISO(diaComoFecha(estado.dia, -1))));
+  $('#dia-siguiente').addEventListener('click', () => elegirDia(fechaISO(diaComoFecha(estado.dia, 1))));
   $('#vistas').addEventListener('click', (e) => {
     const boton = e.target.closest('button');
     if (!boton) return;

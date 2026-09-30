@@ -71,15 +71,27 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 }
 .subtitulo { margin: 4px 0 0; color: var(--texto-suave); }
 
+.periodo { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-width: 100%; }
+@media (max-width: 699px) { .periodo { align-items: flex-start; } }
+.elegir-dia { display: flex; align-items: center; gap: 6px; }
+.elegir-dia input {
+  padding: 5px 10px; border-radius: 10px; border: 1px solid var(--borde);
+  background: var(--tarjeta); color: var(--texto); font: inherit; font-weight: 600;
+}
+.elegir-dia input:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
+.elegir-dia .cerrar { font-size: 1.1rem; line-height: 1; }
+.elegir-dia .cerrar:disabled { opacity: 0.35; cursor: default; }
+
 .segmentado {
   display: inline-flex; padding: 4px; gap: 2px; border-radius: 999px;
-  background: var(--pista);
+  background: var(--pista); max-width: 100%;
 }
 .segmentado button {
   border: 0; background: transparent; padding: 6px 14px; border-radius: 999px;
   cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--texto-suave); white-space: nowrap;
 }
 .segmentado button[aria-pressed="true"] { background: var(--tarjeta); color: var(--texto); box-shadow: var(--sombra); }
+@media (max-width: 420px) { .segmentado button { padding: 6px 10px; } }
 .segmentado button:focus-visible, .seg:focus-visible, .borrar:focus-visible, .editar:focus-visible, .filtro button:focus-visible {
   outline: 2px solid var(--texto); outline-offset: 2px;
 }

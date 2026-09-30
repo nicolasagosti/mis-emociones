@@ -86,11 +86,19 @@
             <h1 id="titulo-vista">Mi diario</h1>
             <p class="subtitulo">La rueda de los sentimientos · Gloria Willcox, 1982</p>
           </div>
-          <div class="segmentado" id="periodos" role="group" aria-label="Período">
-            <button type="button" data-periodo="hoy">Hoy</button>
-            <button type="button" data-periodo="7">7 días</button>
-            <button type="button" data-periodo="30">30 días</button>
-            <button type="button" data-periodo="todo">Todo</button>
+          <div class="periodo">
+            <div class="segmentado" id="periodos" role="group" aria-label="Período">
+              <button type="button" data-periodo="hoy">Hoy</button>
+              <button type="button" data-periodo="7">7 días</button>
+              <button type="button" data-periodo="30">30 días</button>
+              <button type="button" data-periodo="todo">Todo</button>
+              <button type="button" data-periodo="dia">Un día</button>
+            </div>
+            <div class="elegir-dia" id="elegir-dia" hidden>
+              <button type="button" class="cerrar" id="dia-anterior" aria-label="Día anterior">‹</button>
+              <input type="date" id="dia-elegido" required aria-label="Día que quieres ver">
+              <button type="button" class="cerrar" id="dia-siguiente" aria-label="Día siguiente">›</button>
+            </div>
           </div>
         </header>
         <div class="franja"><p class="aviso-lectura" id="aviso-lectura" hidden></p></div>
@@ -159,7 +167,7 @@
             <div class="tablero" id="tablero"></div>
             <div class="diario" id="diario" hidden></div>
             <div class="vacio" id="vacio" hidden>
-              <p><strong>Todavía no hay registros en este período.</strong></p>
+              <p><strong id="texto-vacio">Todavía no hay registros en este período.</strong></p>
               <p class="solo-propio">Escríbele a tu bot de Telegram cómo te sientes y qué lo causó, por ejemplo:</p>
               <p class="solo-propio"><code>Frustrado, ansioso: mi jefe cambió la fecha de entrega</code></p>
             </div>

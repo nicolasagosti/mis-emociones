@@ -6,7 +6,8 @@ compartieron los ve en solo lectura.
 Rutas:
     GET    /api/estado                 qué está configurado y quién entró (sin datos del diario)
     GET    /api/rueda                  la rueda de los sentimientos (público)
-    GET    /api/registros[?diario=id]  tu diario, o uno que te compartieron (con los nombres de su rueda)
+    GET    /api/registros[?diario=id]  tu diario, o uno que te compartieron (con los nombres de su rueda);
+                                       &desde=…&hasta=… (segundos) para un período, como un día
     PATCH  /api/registros/<id>         editar un registro de tu diario: {"causa": "…", "emociones": [
                                        {"id": 7, "emocion": "<id>", "aprender": true}, {"emocion": "<id>"}]}
                                        (las emociones que no se mandan se quitan; las que no tienen id
@@ -216,8 +217,9 @@ class Panel(BaseHTTPRequestHandler):
         else:
             self._error(403)
             return
-        desde = consulta.get("desde", [""])[0]
-        registros = bd.listar_registros(dueno_id, desde=int(desde) if desde.isdigit() else None) if dueno_id else []
+        desde, hasta = (consulta.get(clave, [""])[0] for clave in ("desde", "hasta"))
+        registros = bd.listar_registros(dueno_id, desde=int(desde) if desde.isdigit() else None,
+                                        hasta=int(hasta) if hasta.isdigit() else None) if dueno_id else []
         self._json({"registros": registros, "nombres": bd.nombres(dueno_id) if dueno_id else {}})
 
     def _leer_json(self) -> dict | None:
