@@ -119,8 +119,7 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 @media (min-width: 980px) {
   .contenido { grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); }
   .registros { grid-column: 1 / -1; }
-  /* La rueda queda a la vista mientras recorres el calendario y el resumen. */
-  .panel-rueda { align-self: start; position: sticky; top: 20px; }
+  .panel-rueda { align-self: start; } /* no se estira hasta el alto del calendario y el resumen */
 }
 
 .panel-resumen { align-self: start; }
