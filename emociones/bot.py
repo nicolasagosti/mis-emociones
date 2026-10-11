@@ -73,7 +73,7 @@ def _teclado_registro(registro_id: int, esperando_causa: bool = False) -> list[l
 
 
 def _etiqueta(emocion_id: str, nombres: dict[str, str]) -> str:
-    """«❤️ Enojo › Molesto › Frustrado»."""
+    """«😠 Enojo › Molesto › Frustrado»."""
     emoji = rueda.CATEGORIA[rueda.EMOCIONES[emocion_id].categoria]["emoji"]
     centro, *resto = (html.escape(n) for n in rueda.camino(emocion_id, nombres))
     return " › ".join([f"{emoji} <b>{centro}</b>", *resto])
@@ -90,7 +90,7 @@ def _linea_emocion(fila: dict, nombres: dict[str, str]) -> str:
 
 
 def _corta(fila: dict, nombres: dict[str, str]) -> str:
-    """«❤️ Frustrado», para listados."""
+    """«😠 Frustrado», para listados."""
     emocion = rueda.EMOCIONES.get(fila["emocion"] or "")
     if emocion is None:
         return f'❔ {html.escape(fila["palabra"])}'

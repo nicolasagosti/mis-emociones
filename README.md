@@ -148,6 +148,12 @@ al nombre original cuando quieras (el lápiz ✎ del panel de la emoción la abr
 
 ## El panel
 
+Tiene el estilo de la aplicación Daylio: cada categoría tiene su **carita** (😠 Enojo, 😨 Miedo,
+😄 Felicidad, 😌 Calma, 😎 Fuerza y 😢 Tristeza) y en el celular las secciones están en la barra de abajo.
+
+- **El calendario del mes**: cada día muestra la carita de lo que más sentiste ese día (si empatan,
+  la más reciente). Las flechas ‹ › cambian de mes y debajo ves cuántas veces sentiste cada
+  categoría en el mes. Toca un día para ver sus emociones.
 - **La rueda** tal como en la imagen, con colores más intensos. Lo que sentiste en el período
   elegido queda resaltado y con la cantidad de veces; el resto se atenúa (se puede apagar).
 - Elige el período: hoy, 7 días, 30 días, todo o **un día** en particular (con el calendario o

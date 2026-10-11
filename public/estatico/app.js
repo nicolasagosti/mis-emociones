@@ -12,6 +12,9 @@ const estado = {
   firma: '',
   periodo: leer('periodo', '7'), // 'hoy', '7', '30', 'todo' o 'dia'
   dia: leer('dia', ''), // con 'dia': el que elegiste, como 2026-09-29 (se valida al iniciar)
+  mes: '', // el mes del calendario, como 2026-10
+  calendario: [], // los registros de ese mes
+  firmaMes: '',
   vista: leer('vista', 'categorias'),
   resaltar: leer('resaltar', '1') === '1',
   filtro: null, // { tipo: 'categoria' | 'emocion', id, nombre }
@@ -67,6 +70,17 @@ function diaComoFecha(iso, sumar = 0) {
 const formatoDia = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' });
 const formatoCorto = new Intl.DateTimeFormat('es', { weekday: 'short', day: 'numeric', month: 'short' });
 const formatoHora = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' });
+const formatoMes = new Intl.DateTimeFormat('es', { month: 'long' });
+const mesDe = (iso) => iso.slice(0, 7); // 2026-09-29 → 2026-09
+
+// La carita de una categoría, como en Daylio: un círculo de su color con su cara (sin categoría: «?»).
+function carita(categoriaId) {
+  const cat = categoriaId ? categoria(categoriaId) : null;
+  const nodo = svg('svg', { class: 'carita', viewBox: '0 0 48 48', 'aria-hidden': 'true' });
+  nodo.append(svg('circle', { cx: 24, cy: 24, r: 24, fill: cat ? cat.colores.centro : '#c5cbd2' }),
+    svg('use', { href: `#cara-${cat ? cat.id : 'sin'}` }));
+  return nodo;
+}
 
 // --- Rueda -----------------------------------------------------------------------
 
@@ -141,9 +155,14 @@ function agregarSegmento(lienzo, s) {
   const medio = (s.a0 + s.a1) / 2;
   const texto = svg('text', { 'text-anchor': 'middle' });
   if (s.anillo === 'centro') {
-    const [x, y] = punto(RADIOS.centro * 0.6, medio);
+    const [x, y] = punto(RADIOS.centro * 0.66, medio);
     texto.setAttribute('x', x.toFixed(1));
     texto.setAttribute('y', y.toFixed(1));
+    const [cx, cy] = punto(36, medio); // la carita, más cerca del centro
+    const cara = svg('g', { class: 'cara-rueda', transform: `translate(${cx.toFixed(1)} ${cy.toFixed(1)})` });
+    cara.append(svg('circle', { r: 14, fill: s.color }),
+      svg('use', { href: `#cara-${s.id}`, x: -14, y: -14, width: 28, height: 28 }));
+    grupo.append(cara);
   } else {
     // Texto radial; se da vuelta donde quedaría cabeza abajo (como en la imagen).
     const angulo = ((medio % 360) + 360) % 360;
@@ -302,7 +321,7 @@ function dibujarResumen(conteo) {
     relleno.style.width = `${(100 * cantidad) / maximo}%`;
     relleno.style.setProperty('--color', cat.colores.centro);
     const fila = el('div', 'barra',
-      el('span', 'nombre', `${cat.emoji} ${cat.nombre}`),
+      el('span', 'nombre', carita(cat.id), cat.nombre),
       el('div', 'pista-barra', relleno),
       el('span', 'numero', String(cantidad)));
     fila.title = `Ver registros de ${cat.nombre}`;
@@ -367,12 +386,11 @@ function tarjeta(registro, { enDiario = false } = {}) {
 
   let nodo;
   if (enDiario) {
-    nodo = el('article', 'registro',
-      el('time', 'hora', formatoHora.format(fecha)),
-      el('div', 'cuerpo', el('div', 'chips', ...chips), causa),
-      acciones);
     const primera = registro.emociones.map(info).find(Boolean);
-    nodo.style.setProperty('--color', primera ? categoria(primera.categoria).colores.centro : 'var(--borde)');
+    nodo = el('article', 'registro',
+      carita(primera?.categoria),
+      el('div', 'cuerpo', el('time', 'hora', formatoHora.format(fecha)), el('div', 'chips', ...chips), causa),
+      acciones);
   } else {
     const cuando = `${formatoCorto.format(fecha)} · ${formatoHora.format(fecha)}`;
     nodo = el('article', 'registro',
@@ -391,14 +409,15 @@ function tarjeta(registro, { enDiario = false } = {}) {
 
 function dibujarTablero(registros) {
   const columnas = estado.rueda.categorias.map((cat) => ({
-    titulo: `${cat.emoji} ${cat.nombre}`,
+    titulo: cat.nombre,
+    cara: cat.id,
     color: cat.colores.centro,
     registros: registros.filter((r) => r.emociones.some((f) => info(f)?.categoria === cat.id)),
     id: cat.id,
   }));
   const sinClasificar = registros.filter((r) => !r.emociones.length || r.emociones.some((f) => !info(f)));
   if (sinClasificar.length) {
-    columnas.push({ titulo: '❔ Sin clasificar', color: 'var(--pista)', registros: sinClasificar, id: null });
+    columnas.push({ titulo: 'Sin clasificar', cara: null, color: 'var(--pista)', registros: sinClasificar, id: null });
   }
 
   const { filtro } = estado;
@@ -407,9 +426,8 @@ function dibujarTablero(registros) {
   ));
   $('#tablero').replaceChildren(...mostrar.map((columna) => {
     const cabecera = el('header', null,
-      el('span', null, columna.titulo),
+      el('span', 'titulo', carita(columna.cara), columna.titulo),
       el('span', 'cantidad', String(columna.registros.length)));
-    cabecera.style.setProperty('--color', columna.color);
     const lista = columna.registros.length
       ? el('div', 'lista', ...columna.registros.map((r) => tarjeta(r)))
       : el('p', 'vacia', 'Nada por aquí en este período.');
@@ -436,10 +454,131 @@ async function borrarRegistro(id) {
   const respuesta = await fetch(`/api/registros/${id}`, { method: 'DELETE' });
   if (respuesta.ok) {
     estado.firma = '';
-    await cargarRegistros();
+    await recargar();
   }
   return respuesta.ok;
 }
+
+// --- Calendario del mes: una carita por día ------------------------------------------------
+
+// La categoría que más sentiste en esos registros (si empatan, la más reciente) y cuántas veces cada una.
+function caritaDelDia(registros) {
+  const conteo = new Map();
+  let elegida = null;
+  let maximo = 0;
+  for (const registro of [...registros].sort((a, b) => a.creado_en - b.creado_en)) {
+    for (const fila of registro.emociones) {
+      const datos = info(fila);
+      if (!datos) continue;
+      const veces = (conteo.get(datos.categoria) || 0) + 1;
+      conteo.set(datos.categoria, veces);
+      if (veces >= maximo) {
+        maximo = veces;
+        elegida = datos.categoria;
+      }
+    }
+  }
+  return { elegida, conteo };
+}
+
+const primeroDelMes = (mes) => diaComoFecha(`${mes}-01`);
+
+function dibujarCalendario() {
+  const inicio = primeroDelMes(estado.mes);
+  const anio = inicio.getFullYear();
+  const mes = inicio.getMonth();
+  const nombreMes = formatoMes.format(inicio);
+  $('#titulo-mes').textContent = `${nombreMes[0].toUpperCase()}${nombreMes.slice(1)} ${anio}`;
+  $('#mes-siguiente').disabled = estado.mes >= mesDe(hoyISO());
+  $('#titulo-conteo-mes').textContent = `En ${nombreMes}`;
+
+  const porDia = new Map();
+  for (const registro of estado.calendario) {
+    const clave = fechaISO(new Date(registro.creado_en * 1000));
+    if (!porDia.has(clave)) porDia.set(clave, []);
+    porDia.get(clave).push(registro);
+  }
+
+  const hoy = hoyISO();
+  const elegido = estado.periodo === 'dia' ? estado.dia : null;
+  const blancos = (inicio.getDay() + 6) % 7; // la semana empieza el lunes
+  const celdas = Array.from({ length: blancos }, () => el('span', 'celda'));
+  const dias = new Date(anio, mes + 1, 0).getDate();
+  for (let numero = 1; numero <= dias; numero += 1) {
+    const fecha = new Date(anio, mes, numero);
+    const iso = fechaISO(fecha);
+    const registros = porDia.get(iso) || [];
+    const { elegida, conteo } = caritaDelDia(registros);
+    const boton = el('button', 'celda',
+      registros.length ? carita(elegida) : el('span', 'circulo'),
+      el('span', 'numero', String(numero)));
+    boton.type = 'button';
+    boton.classList.toggle('hoy', iso === hoy);
+    boton.classList.toggle('elegido', iso === elegido);
+    if (iso === elegido) boton.setAttribute('aria-current', 'date');
+    const detalle = registros.length
+      ? [...conteo].sort((a, b) => b[1] - a[1])
+        .map(([id, veces]) => `${categoria(id).nombre}${veces > 1 ? ` ×${veces}` : ''}`).join(', ') || 'sin clasificar'
+      : 'sin registros';
+    boton.title = `${formatoDia.format(fecha)}: ${detalle}`;
+    boton.setAttribute('aria-label', boton.title);
+    if (iso > hoy) boton.disabled = true; // no hay registros en el futuro
+    else boton.addEventListener('click', () => elegirDia(iso));
+    celdas.push(boton);
+  }
+  $('#calendario').replaceChildren(...celdas);
+
+  // Como el «Mood Count» de Daylio: cuántas veces sentiste cada categoría en el mes.
+  const { porCategoria } = contar(estado.calendario);
+  $('#conteo-mes').replaceChildren(...estado.rueda.categorias.map((cat) => {
+    const veces = porCategoria.get(cat.id) || 0;
+    const fila = el('li', veces ? null : 'cero', carita(cat.id), el('span', null, String(veces)));
+    fila.title = `${cat.nombre}: ${veces} ${veces === 1 ? 'vez' : 'veces'} en ${nombreMes}`;
+    return fila;
+  }));
+}
+
+async function cargarCalendario() {
+  const { mes } = estado;
+  const diario = estado.diario?.id ?? null;
+  const inicio = primeroDelMes(mes);
+  const parametros = new URLSearchParams({
+    desde: Math.floor(inicio.getTime() / 1000),
+    hasta: Math.floor(new Date(inicio.getFullYear(), inicio.getMonth() + 1, 1).getTime() / 1000),
+  });
+  if (diario !== null) parametros.set('diario', diario);
+  try {
+    const respuesta = await fetch(`/api/registros?${parametros}`);
+    if (!respuesta.ok) return; // de la sesión y los permisos se ocupa cargarRegistros
+    const { registros } = await respuesta.json();
+    if (mes !== estado.mes || diario !== (estado.diario?.id ?? null)) return; // mientras tanto cambiaste de mes o de diario
+    const firma = JSON.stringify(registros);
+    if (firma === estado.firmaMes) return;
+    estado.firmaMes = firma;
+    estado.calendario = registros;
+    dibujarCalendario();
+  } catch (error) {
+    console.warn('No pude leer el mes:', error);
+  }
+}
+
+function verMes(mes) {
+  if (mes === estado.mes) return;
+  estado.mes = mes;
+  estado.calendario = [];
+  estado.firmaMes = '';
+  dibujarCalendario();
+  cargarCalendario();
+}
+
+function cambiarMes(salto) {
+  const inicio = primeroDelMes(estado.mes);
+  const mes = mesDe(fechaISO(new Date(inicio.getFullYear(), inicio.getMonth() + salto, 1)));
+  if (mes <= mesDe(hoyISO())) verMes(mes);
+}
+
+// Los registros del período y los del mes del calendario.
+const recargar = () => Promise.all([cargarRegistros(), cargarCalendario()]);
 
 // --- Estado y eventos -------------------------------------------------------------------
 
@@ -484,6 +623,7 @@ function dibujarPeriodo() {
   $('#dia-elegido').value = estado.dia;
   $('#dia-siguiente').disabled = estado.dia >= hoyISO();
   $('#texto-vacio').textContent = unDia ? 'No hay registros ese día.' : 'Todavía no hay registros en este período.';
+  dibujarCalendario();
 }
 
 function elegirPeriodo(periodo) {
@@ -498,6 +638,7 @@ function elegirDia(iso) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || Number.isNaN(diaComoFecha(iso).getTime())) return;
   estado.dia = iso > hoyISO() ? hoyISO() : iso; // no hay registros en el futuro
   guardar('dia', estado.dia);
+  verMes(mesDe(estado.dia));
   elegirPeriodo('dia');
 }
 
@@ -550,6 +691,9 @@ async function cargarRegistros() {
 
 function conectarControles() {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(estado.dia) || estado.dia > hoyISO()) estado.dia = hoyISO();
+  estado.mes = mesDe(estado.periodo === 'dia' ? estado.dia : hoyISO());
+  $('#mes-anterior').addEventListener('click', () => cambiarMes(-1));
+  $('#mes-siguiente').addEventListener('click', () => cambiarMes(1));
   $('#periodos').addEventListener('click', (e) => {
     const boton = e.target.closest('button');
     if (!boton) return;
@@ -581,9 +725,9 @@ function conectarControles() {
     // Al volver a la pestaña: quizás vinculaste Telegram o alguien te compartió su diario.
     if (document.hidden) return;
     if (estado.servidor?.requiere_sesion && !(await actualizarCuenta())) return;
-    cargarRegistros();
+    recargar();
   });
-  estado.refresco = setInterval(() => { if (!document.hidden) cargarRegistros(); }, REFRESCO_MS);
+  estado.refresco = setInterval(() => { if (!document.hidden) recargar(); }, REFRESCO_MS);
 }
 
 // --- Acceso (fuera de tu computadora, el panel pide entrar) ------------------------------------
@@ -1023,7 +1167,7 @@ async function guardarRegistro() {
   $('#dialogo-registro').close();
   if (emociones.some((e) => e.aprender)) estado.palabras = null; // el bot aprendió una palabra
   estado.firma = '';
-  await cargarRegistros();
+  await recargar();
 }
 
 function iniciarEditorRegistro() {
@@ -1133,11 +1277,13 @@ function cerrarMenu() {
 function dibujarLateral() {
   const { servidor } = estado;
   const conCuenta = Boolean(servidor.requiere_sesion && servidor.cuenta);
-  for (const id of ['#grupo-compartidos', '#nav-palabras', '#nav-compartir', '#nav-telegram', '#caja-usuario']) {
+  for (const id of ['#grupo-compartidos', '#nav-palabras', '#nav-compartir', '#nav-telegram', '#caja-usuario',
+    '#tab-palabras', '#tab-compartir', '#tab-telegram']) {
     $(id).hidden = !conCuenta;
   }
   if (!conCuenta) return;
   $('#insignia-telegram').hidden = !servidor.token || servidor.cuenta.telegram;
+  $('#punto-telegram').hidden = $('#insignia-telegram').hidden;
   const nombre = servidor.cuenta.correo || 'Telegram';
   $('#nombre-usuario').textContent = nombre;
   $('#detalle-usuario').textContent = servidor.cuenta.correo ? 'Cuenta de Google' : 'Entraste con Telegram';
@@ -1170,7 +1316,7 @@ function mostrarRuta() {
 
   const vista = compartido ? 'diario' : seccion;
   for (const nombre of ['diario', 'palabras', 'compartir', 'telegram']) $(`#vista-${nombre}`).hidden = nombre !== vista;
-  for (const enlace of document.querySelectorAll('#lateral a[data-ruta]')) {
+  for (const enlace of document.querySelectorAll('a[data-ruta]')) { // en el menú y en la barra de abajo
     if (enlace.dataset.ruta === actual) enlace.setAttribute('aria-current', 'page');
     else enlace.removeAttribute('aria-current');
   }
@@ -1198,8 +1344,10 @@ function mostrarDiario(compartido) {
   estado.filtro = null;
   estado.firma = '';
   estado.registros = [];
+  estado.firmaMes = '';
+  estado.calendario = [];
   dibujar();
-  cargarRegistros();
+  recargar();
 }
 
 async function actualizarCuenta() {

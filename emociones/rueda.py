@@ -17,37 +17,37 @@ from dataclasses import dataclass, field
 # cada palabra del anillo medio con la del anillo exterior que queda justo afuera.
 CATEGORIAS = [
     {
-        "id": "enojo", "nombre": "Enojo", "emoji": "❤️",
+        "id": "enojo", "nombre": "Enojo", "emoji": "😠",
         "colores": ("#EB5547", "#F2877D", "#F9B9B3"),
         "ramas": [("Hostil", "Egoísta"), ("Irritado", "Celoso"), ("Furioso", "Furioso"),
                   ("Estresado", "Irritado"), ("Crítico", "Escéptico"), ("Molesto", "Frustrado")],
     },
     {
-        "id": "miedo", "nombre": "Miedo", "emoji": "💜",
+        "id": "miedo", "nombre": "Miedo", "emoji": "😨",
         "colores": ("#A95BD0", "#C88DE2", "#E0BDF0"),
         "ramas": [("Débil", "Sin valor"), ("Inseguro", "Inferior"), ("Confundido", "Perplejo"),
                   ("Amenazado", "Nervioso"), ("Ansioso", "Preocupado"), ("Rechazado", "Excluido")],
     },
     {
-        "id": "felicidad", "nombre": "Felicidad", "emoji": "🩷",
+        "id": "felicidad", "nombre": "Felicidad", "emoji": "😄",
         "colores": ("#EB4783", "#F27DA8", "#F9B3CD"),
         "ramas": [("Optimista", "Esperanzado"), ("Entusiasmado", "Energético"), ("Juguetón", "Excitado"),
                   ("Contenido", "Alegre"), ("Aceptado", "Valorado"), ("Interesado", "Curioso")],
     },
     {
-        "id": "calma", "nombre": "Calma", "emoji": "💛",
+        "id": "calma", "nombre": "Calma", "emoji": "😌",
         "colores": ("#F8B928", "#FDD372", "#FFE7AD"),
         "ramas": [("Aliviado", "Seguro"), ("Considerado", "Relajado"), ("Tranquilo", "Sereno"),
                   ("Agradecido", "Cariñoso"), ("Confiado", "Sensible"), ("Conectado", "Pertenencia")],
     },
     {
-        "id": "fuerza", "nombre": "Fuerza", "emoji": "💚",
+        "id": "fuerza", "nombre": "Fuerza", "emoji": "😎",
         "colores": ("#4CC27A", "#90E0AD", "#BEEED0"),
         "ramas": [("Orgulloso", "Agradecido"), ("Fuerte", "Exitoso"), ("Valiente", "Creativo"),
                   ("Apreciado", "Respetado"), ("Fiel", "Leal"), ("Empoderado", "Enfocado")],
     },
     {
-        "id": "tristeza", "nombre": "Tristeza", "emoji": "💙",
+        "id": "tristeza", "nombre": "Tristeza", "emoji": "😢",
         "colores": ("#3D9BE0", "#81C1EE", "#B5DCF7"),
         "ramas": [("Deprimido", "Avergonzado"), ("Indiferente", "Aburrido"), ("Deprimido", "Miserable"),
                   ("Solitario", "Aislado"), ("Vulnerable", "Frágil"), ("Arrepentido", "Culpable")],

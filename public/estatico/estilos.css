@@ -1,45 +1,61 @@
+/* Como Daylio: fondo gris claro, tarjetas blancas bien redondeadas y un verde de acento. */
 :root {
-  --fondo: #f6f3ef;
+  --fondo: #eef0f3;
   --tarjeta: #ffffff;
-  --texto: #221e1b;
-  --texto-suave: #6d655e;
-  --borde: #e7e1da;
+  --texto: #1d2023;
+  --texto-suave: #656c73;
+  --borde: #e2e5e9;
   --linea: #ffffff;
-  --marco: #a9b8c6;
-  --pista: #ece7e1;
-  --lateral: #efe9e2;
-  --sombra: 0 1px 2px rgb(40 30 20 / 6%), 0 8px 24px rgb(40 30 20 / 6%);
+  --marco: #b4c0cb;
+  --pista: #eceef1;
+  --lateral: #ffffff;
+  --acento: #4fb58c;
+  --acento-texto: #1c7350;
+  --acento-suave: #dcf2e8;
+  --boton: #23845d;
+  --boton-texto: #ffffff;
+  --sombra: 0 1px 2px rgb(25 35 45 / 5%), 0 6px 18px rgb(25 35 45 / 6%);
   --texto-rueda: #1d1a17;
-  --radio: 20px;
+  --radio: 26px;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --fondo: #141317;
-    --tarjeta: #1e1c22;
-    --texto: #f2eee9;
-    --texto-suave: #a59e97;
-    --borde: #2f2c34;
-    --linea: #1e1c22;
+    --fondo: #151719;
+    --tarjeta: #212427;
+    --texto: #eef0f2;
+    --texto-suave: #9ba2a9;
+    --borde: #2e3236;
+    --linea: #212427;
     --marco: #4a5663;
-    --pista: #2c2931;
-    --lateral: #18171c;
+    --pista: #2c3034;
+    --lateral: #1b1d20;
+    --acento: #5cc29a;
+    --acento-texto: #7fd6b2;
+    --acento-suave: #234237;
+    --boton: #5cc29a;
+    --boton-texto: #0f1a14;
     --sombra: none;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --fondo: #141317;
-  --tarjeta: #1e1c22;
-  --texto: #f2eee9;
-  --texto-suave: #a59e97;
-  --borde: #2f2c34;
-  --linea: #1e1c22;
+  --fondo: #151719;
+  --tarjeta: #212427;
+  --texto: #eef0f2;
+  --texto-suave: #9ba2a9;
+  --borde: #2e3236;
+  --linea: #212427;
   --marco: #4a5663;
-  --pista: #2c2931;
-  --lateral: #18171c;
+  --pista: #2c3034;
+  --lateral: #1b1d20;
+  --acento: #5cc29a;
+  --acento-texto: #7fd6b2;
+  --acento-suave: #234237;
+  --boton: #5cc29a;
+  --boton-texto: #0f1a14;
   --sombra: none;
   color-scheme: dark;
 }
@@ -75,7 +91,7 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 @media (max-width: 699px) { .periodo { align-items: flex-start; } }
 .elegir-dia { display: flex; align-items: center; gap: 6px; }
 .elegir-dia input {
-  padding: 5px 10px; border-radius: 10px; border: 1px solid var(--borde);
+  padding: 5px 10px; border-radius: 999px; border: 1px solid var(--borde);
   background: var(--tarjeta); color: var(--texto); font: inherit; font-weight: 600;
 }
 .elegir-dia input:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
@@ -84,13 +100,13 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 
 .segmentado {
   display: inline-flex; padding: 4px; gap: 2px; border-radius: 999px;
-  background: var(--pista); max-width: 100%;
+  background: var(--tarjeta); box-shadow: var(--sombra); max-width: 100%;
 }
 .segmentado button {
   border: 0; background: transparent; padding: 6px 14px; border-radius: 999px;
   cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--texto-suave); white-space: nowrap;
 }
-.segmentado button[aria-pressed="true"] { background: var(--tarjeta); color: var(--texto); box-shadow: var(--sombra); }
+.segmentado button[aria-pressed="true"] { background: var(--acento-suave); color: var(--acento-texto); }
 @media (max-width: 420px) { .segmentado button { padding: 6px 10px; } }
 .segmentado button:focus-visible, .seg:focus-visible, .borrar:focus-visible, .editar:focus-visible, .filtro button:focus-visible {
   outline: 2px solid var(--texto); outline-offset: 2px;
@@ -103,10 +119,17 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 @media (min-width: 980px) {
   .contenido { grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); }
   .registros { grid-column: 1 / -1; }
+  /* La rueda queda a la vista mientras recorres el calendario y el resumen. */
+  .panel-rueda { align-self: start; position: sticky; top: 20px; }
 }
 
 .panel-resumen { align-self: start; }
 .columna-lateral { display: grid; gap: 20px; align-self: start; min-width: 0; }
+/* En el celular, el calendario del mes va primero (como en Daylio) y el resto sigue debajo de la rueda. */
+@media (max-width: 979px) {
+  .columna-lateral { display: contents; }
+  .panel-calendario { order: -1; }
+}
 .panel-emocion h2 .chip { font-size: 1rem; padding: 3px 12px; }
 .panel-emocion h3 { margin-top: 16px; }
 .panel-emocion .form-acceso { margin-top: 10px; }
@@ -117,7 +140,7 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .cerrar:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
 .incluidas { margin: 0; color: var(--texto-suave); font-size: 0.85rem; overflow-wrap: anywhere; }
 .dialogo {
-  width: min(480px, calc(100vw - 32px)); padding: 22px; border: 1px solid var(--borde); border-radius: 16px;
+  width: min(480px, calc(100vw - 32px)); padding: 22px; border: 1px solid var(--borde); border-radius: 24px;
   background: var(--tarjeta); color: var(--texto); box-shadow: 0 20px 60px rgb(0 0 0 / 30%);
 }
 .dialogo::backdrop { background: rgb(0 0 0 / 40%); }
@@ -139,7 +162,7 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .form-palabra .botones { margin-top: 6px; }
 
 .tarjeta {
-  background: var(--tarjeta); border: 1px solid var(--borde); border-radius: var(--radio);
+  background: var(--tarjeta); border: 0; border-radius: var(--radio);
   padding: 20px; box-shadow: var(--sombra); min-width: 0;
 }
 .fila-titulo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -162,6 +185,10 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .rueda.resaltar .seg.con-datos text { font-weight: 800; }
 .seg.seleccionado path, .seg.seleccionado text { opacity: 1 !important; }
 .seg.seleccionado path { stroke: var(--texto); stroke-width: 3; }
+.cara-rueda { pointer-events: none; transition: opacity 0.25s; }
+.cara-rueda circle { stroke: var(--linea); stroke-width: 2; }
+.rueda.resaltar .seg.sin-datos .cara-rueda { opacity: 0.5; }
+.seg.seleccionado .cara-rueda { opacity: 1 !important; }
 .nota { margin: 10px 0 0; text-align: center; color: var(--texto-suave); font-size: 0.85rem; }
 
 .interruptor { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; color: var(--texto-suave); user-select: none; }
@@ -171,7 +198,7 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
   content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
   background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 25%); transition: transform 0.2s;
 }
-.interruptor input:checked + .pista-interruptor { background: #4cc27a; }
+.interruptor input:checked + .pista-interruptor { background: var(--acento); }
 .interruptor input:checked + .pista-interruptor::after { transform: translateX(16px); }
 .interruptor input:focus-visible + .pista-interruptor { outline: 2px solid var(--texto); outline-offset: 2px; }
 
@@ -180,9 +207,10 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .totales strong { display: block; font-size: 2rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .totales span { color: var(--texto-suave); font-size: 0.85rem; }
 
-.barra { display: grid; grid-template-columns: 7.5rem 1fr 2.2rem; align-items: center; gap: 10px; padding: 5px 0; cursor: pointer; border-radius: 8px; }
+.barra { display: grid; grid-template-columns: 8.8rem 1fr 2.2rem; align-items: center; gap: 10px; padding: 5px 0; cursor: pointer; border-radius: 8px; }
 .barra:hover .relleno { filter: brightness(1.06); }
-.barra .nombre { font-weight: 600; font-size: 0.92rem; white-space: nowrap; }
+.barra .nombre { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 600; font-size: 0.92rem; white-space: nowrap; }
+.barra .carita { width: 26px; height: 26px; }
 .barra .pista-barra { height: 12px; border-radius: 999px; background: var(--pista); overflow: hidden; }
 .barra .relleno { height: 100%; border-radius: 999px; background: var(--color); min-width: 0; transition: width 0.4s ease; }
 .barra .numero { text-align: right; font-variant-numeric: tabular-nums; color: var(--texto-suave); font-weight: 600; }
@@ -210,12 +238,14 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .filtro button { border: 0; background: var(--pista); width: 24px; height: 24px; border-radius: 50%; cursor: pointer; }
 
 .tablero { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); align-items: start; }
-.columna { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; overflow: hidden; box-shadow: var(--sombra); }
+.columna { background: var(--tarjeta); border-radius: 22px; overflow: hidden; box-shadow: var(--sombra); }
 .columna > header {
-  display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
-  background: var(--color); color: var(--texto-rueda); font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.9rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px;
+  background: color-mix(in srgb, var(--color) 26%, var(--tarjeta)); color: var(--texto); font-weight: 800; font-size: 1rem;
 }
-.columna > header .cantidad { background: rgb(255 255 255 / 55%); border-radius: 999px; padding: 0 9px; font-size: 0.8rem; }
+.columna > header .titulo { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.columna > header .carita { width: 32px; height: 32px; }
+.columna > header .cantidad { background: var(--tarjeta); border-radius: 999px; padding: 0 9px; font-size: 0.8rem; }
 .columna .lista { display: grid; }
 .columna .vacia { padding: 14px; color: var(--texto-suave); font-size: 0.88rem; }
 
@@ -239,13 +269,14 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 
 .diario { display: grid; gap: 18px; }
 .dia h3 { margin: 0 0 8px; }
-.dia .lista { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 16px; overflow: hidden; box-shadow: var(--sombra); }
-.dia .registro { grid-template-columns: 3.4rem 1fr auto; align-items: start; column-gap: 12px; border-left: 5px solid var(--color); }
+.dia .lista { background: var(--tarjeta); border-radius: 22px; overflow: hidden; box-shadow: var(--sombra); }
+.dia .registro { grid-template-columns: 46px minmax(0, 1fr) auto; align-items: start; column-gap: 14px; padding: 14px 16px; }
 .dia .registro:first-child { border-top: 0; }
-.dia .hora { font-weight: 700; font-variant-numeric: tabular-nums; padding-top: 2px; }
+.dia .registro .carita { width: 46px; height: 46px; }
+.dia .hora { font-weight: 700; font-size: 0.85rem; color: var(--texto-suave); font-variant-numeric: tabular-nums; }
 .dia .cuerpo { display: grid; gap: 6px; min-width: 0; }
 
-.vacio { text-align: center; padding: 36px 16px; color: var(--texto-suave); background: var(--tarjeta); border: 1px dashed var(--borde); border-radius: var(--radio); }
+.vacio { text-align: center; padding: 36px 16px; color: var(--texto-suave); background: var(--tarjeta); border-radius: var(--radio); box-shadow: var(--sombra); }
 .vacio p { margin: 6px 0; }
 
 /* --- Menú lateral (fijo en computadora; en el celular se abre con ☰) ----------------- */
@@ -268,11 +299,11 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
   color: var(--texto-suave); font-weight: 600; font-size: 0.93rem; text-decoration: none;
 }
 .navegacion a:hover { background: var(--pista); color: var(--texto); }
-.navegacion a[aria-current="page"] { background: var(--tarjeta); color: var(--texto); box-shadow: var(--sombra); }
-.navegacion a:focus-visible, .boton-menu:focus-visible, .caja-usuario .salir:focus-visible {
+.navegacion a[aria-current="page"] { background: var(--acento-suave); color: var(--acento-texto); }
+.navegacion a:focus-visible, .barra-inferior :is(a, button):focus-visible, .caja-usuario .salir:focus-visible {
   outline: 2px solid var(--texto); outline-offset: 2px;
 }
-.navegacion svg, .boton-menu svg, .caja-usuario .salir svg {
+.navegacion svg, .barra-inferior svg, .caja-usuario .salir svg {
   width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor;
   stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
 }
@@ -299,12 +330,7 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .caja-usuario .salir { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--texto-suave); }
 .caja-usuario .salir:hover { background: var(--pista); color: var(--texto); }
 
-.barra-movil { display: none; }
-.boton-menu {
-  display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 10px;
-  background: transparent; color: var(--texto); cursor: pointer;
-}
-.boton-menu:hover { background: var(--pista); }
+.barra-inferior { display: none; }
 .velo { position: fixed; inset: 0; z-index: 35; background: rgb(0 0 0 / 35%); }
 @media (max-width: 1023px) {
   .lateral {
@@ -312,10 +338,27 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
     transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: 0 0 40px rgb(0 0 0 / 20%);
   }
   .lateral.abierto { transform: none; }
-  .barra-movil {
-    display: flex; position: sticky; top: 0; z-index: 30; height: 56px; padding: 0 12px 0 6px;
-    align-items: center; justify-content: space-between;
-    background: var(--fondo); border-bottom: 1px solid var(--borde);
+  .principal { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  .barra-inferior {
+    display: flex; position: fixed; z-index: 30; left: 0; right: 0; bottom: 0;
+    padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
+    background: var(--tarjeta); border-top: 1px solid var(--borde); box-shadow: 0 -4px 18px rgb(25 35 45 / 6%);
+  }
+  .barra-inferior a, .barra-inferior button {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 2px;
+    border: 0; background: none; color: var(--texto-suave); font: inherit; font-size: 0.74rem; font-weight: 600;
+    text-decoration: none; cursor: pointer; border-radius: 12px; -webkit-tap-highlight-color: transparent;
+  }
+  .barra-inferior .icono {
+    position: relative; display: grid; place-items: center; width: min(60px, 100%); height: 32px; border-radius: 999px;
+    transition: background 0.2s;
+  }
+  .barra-inferior svg { width: 22px; height: 22px; }
+  .barra-inferior [aria-current="page"], .barra-inferior [aria-expanded="true"] { color: var(--acento-texto); }
+  .barra-inferior [aria-current="page"] .icono, .barra-inferior [aria-expanded="true"] .icono { background: var(--acento-suave); }
+  .barra-inferior .punto {
+    position: absolute; top: 3px; right: calc(50% - 15px); width: 9px; height: 9px; border-radius: 50%;
+    background: #2aabee; box-shadow: 0 0 0 2px var(--tarjeta);
   }
 }
 @media (min-width: 1024px) { .velo { display: none !important; } }
@@ -339,8 +382,8 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .pasos-lista { margin: 0 0 16px; padding-left: 1.3em; display: grid; gap: 6px; color: var(--texto-suave); font-size: 0.92rem; }
 .pasos-lista strong { color: var(--texto); overflow-wrap: anywhere; }
 .boton {
-  display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 10px; padding: 9px 16px;
-  background: var(--texto); color: var(--tarjeta); font: inherit; font-weight: 700; font-size: 0.92rem;
+  display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; padding: 9px 18px;
+  background: var(--boton); color: var(--boton-texto); font: inherit; font-weight: 700; font-size: 0.92rem;
   cursor: pointer; text-decoration: none;
 }
 .boton.secundario { background: var(--pista); color: var(--texto); }
@@ -357,13 +400,13 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 
 .form-acceso { display: flex; gap: 8px; }
 .form-acceso input {
-  flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; font: inherit;
+  flex: 1; min-width: 0; padding: 9px 14px; border-radius: 12px; font: inherit;
   border: 1px solid var(--borde); background: var(--fondo); color: var(--texto);
 }
 .form-acceso input:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
 .form-acceso button {
-  border: 0; border-radius: 10px; padding: 9px 14px; cursor: pointer; white-space: nowrap;
-  background: var(--texto); color: var(--tarjeta); font-weight: 700;
+  border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; white-space: nowrap;
+  background: var(--boton); color: var(--boton-texto); font-weight: 700;
 }
 .aviso-acceso { font-size: 0.85rem; margin: 8px 0 0; color: var(--texto-suave); }
 .accesos { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; }
@@ -376,7 +419,7 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .form-palabra { display: grid; gap: 8px; }
 .form-palabra label { font-weight: 600; font-size: 0.88rem; }
 .form-palabra input, .form-palabra select, .form-palabra textarea {
-  min-width: 0; padding: 9px 12px; border-radius: 10px; font: inherit;
+  min-width: 0; padding: 9px 12px; border-radius: 12px; font: inherit;
   border: 1px solid var(--borde); background: var(--fondo); color: var(--texto);
 }
 .form-palabra input:focus-visible, .form-palabra select:focus-visible, .form-palabra textarea:focus-visible {
@@ -434,6 +477,45 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .pasos .falta .marca { color: #d4382b; }
 .pasos strong { display: block; }
 .pasos span { color: var(--texto-suave); font-size: 0.9rem; }
+
+/* --- Calendario del mes: una carita por día, como en Daylio --------------------------------- */
+.carita { display: block; flex: none; }
+.cabecera-mes { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; margin-bottom: 16px; }
+.cabecera-mes h2 { text-align: center; font-size: 1.3rem; }
+.flecha {
+  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
+  border: 1.5px solid var(--borde); background: transparent; color: var(--texto-suave);
+}
+.flecha svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.flecha:hover:not(:disabled) { background: var(--pista); color: var(--texto); }
+.flecha:disabled { opacity: 0.35; cursor: default; }
+.flecha:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.semana, .calendario { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); column-gap: 2px; }
+.semana span { text-align: center; color: var(--texto-suave); font-size: 0.8rem; padding-bottom: 8px; }
+.calendario { row-gap: 8px; }
+.celda {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 0;
+  border: 0; background: none; color: var(--texto); font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.celda .circulo, .celda .carita { width: min(42px, 100%); aspect-ratio: 1; height: auto; border-radius: 50%; transition: transform 0.15s; }
+.celda .circulo { display: block; background: var(--pista); }
+.celda .numero { font-size: 0.85rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.celda:hover:not(:disabled) .circulo { background: var(--borde); }
+.celda:hover:not(:disabled) .carita { transform: scale(1.07); }
+.celda.hoy .circulo { background: var(--acento-suave); box-shadow: inset 0 0 0 2px var(--acento); }
+.celda.hoy .numero { color: var(--acento-texto); font-weight: 800; }
+.celda.elegido .circulo, .celda.elegido .carita { box-shadow: 0 0 0 2px var(--tarjeta), 0 0 0 4px var(--texto); }
+.celda:disabled { cursor: default; }
+.celda:disabled .circulo { opacity: 0.55; }
+.celda:disabled .numero { color: var(--texto-suave); }
+.celda:focus-visible { outline: none; }
+.celda:focus-visible .circulo, .celda:focus-visible .carita { box-shadow: 0 0 0 2px var(--tarjeta), 0 0 0 4px var(--acento); }
+.panel-calendario h3 { margin-top: 20px; }
+.conteo-mes { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.conteo-mes li { display: flex; flex-direction: column; align-items: center; gap: 4px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.conteo-mes .carita { width: min(42px, 100%); height: auto; aspect-ratio: 1; }
+.conteo-mes li.cero .carita { filter: grayscale(1); opacity: 0.35; }
+.conteo-mes li.cero span { color: var(--texto-suave); font-weight: 600; }
 
 .globo {
   position: fixed; z-index: 10; pointer-events: none; max-width: 260px;
