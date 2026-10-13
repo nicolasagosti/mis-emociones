@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 from urllib.parse import parse_qs, urlsplit
 
-from emociones import google, sesion
+from emociones import google, rueda, sesion
 from emociones.config import Configuracion
 from emociones.web import _webhooks_conectados, crear_servidor
 from tests.test_bot import APIFalsa
@@ -384,6 +384,44 @@ class TestDiarios(ServidorDePrueba):
         igual = self.bd.obtener_registro(registro)
         self.assertEqual((igual["causa"], [e["emocion"] for e in igual["emociones"]]), ("x", ["tristeza"]))
         self.assertEqual(self.bd.vocabulario(yo["id"]), {})
+
+    def cargar(self, datos, correo="yo@gmail.com", **cabeceras):
+        todas = {**self.sesion_de(correo), "Content-Type": "application/json", **cabeceras}
+        return self.pedir("/api/registros", "POST", todas, json.dumps(datos).encode())
+
+    def test_cargar_un_registro_desde_el_panel(self):
+        yo = self.estado("yo@gmail.com")["cuenta"]
+        self.renombrar("enojo/frustrado", "Bloqueado")
+        ayer = int(time.time()) - 86_400
+        estado, _, respuesta = self.cargar({"emociones": ["enojo/frustrado", "calma"], "causa": "  El tráfico ",
+                                            "creado_en": ayer})
+        self.assertEqual(estado, 200)
+        registro = json.loads(respuesta)["registro"]
+        self.assertEqual((registro["usuario_id"], registro["creado_en"], registro["causa"], registro["mensaje"]),
+                         (yo["id"], ayer, "El tráfico", None))
+        # La palabra es el nombre que la emoción tiene en tu rueda.
+        self.assertEqual([(e["palabra"], e["emocion"]) for e in registro["emociones"]],
+                         [("Bloqueado", "enojo/frustrado"), ("Calma", "calma")])
+        # Sin fecha ni causa: ahora y sin causa.
+        registro = json.loads(self.cargar({"emociones": ["tristeza"], "causa": " "})[2])["registro"]
+        self.assertIsNone(registro["causa"])
+        self.assertLessEqual(abs(registro["creado_en"] - time.time()), 5)
+        self.assertEqual(len(self.bd.listar_registros(yo["id"])), 2)
+
+    def test_cargar_requiere_sesion_y_datos_validos(self):
+        yo = self.estado("yo@gmail.com")["cuenta"]
+        valido = {"emociones": ["calma"]}
+        sin_sesion = {"Content-Type": "application/json"}
+        self.assertEqual(self.pedir("/api/registros", "POST", sin_sesion, json.dumps(valido).encode())[0], 401)
+        self.assertEqual(self.cargar(valido, Origin="https://sitio-ajeno.com")[0], 403)
+        for invalido in ({}, {"emociones": []}, {"emociones": "calma"}, {"emociones": ["no/existe"]},
+                         {"emociones": ["calma", "calma"]}, {"emociones": [["calma"]]},
+                         {"emociones": [e for e in rueda.EMOCIONES][:21]}, {**valido, "causa": 5},
+                         {**valido, "causa": "x" * 4097}, {**valido, "creado_en": "ayer"},
+                         {**valido, "creado_en": True}, {**valido, "creado_en": int(time.time()) + 3600},
+                         {**valido, "creado_en": 0}, ["calma"]):
+            self.assertEqual(self.cargar(invalido)[0], 400, invalido)
+        self.assertEqual(self.bd.listar_registros(yo["id"]), [])
 
     def renombrar(self, emocion, nombre, correo="yo@gmail.com", **cabeceras):
         todas = {**self.sesion_de(correo), "Content-Type": "application/json", **cabeceras}

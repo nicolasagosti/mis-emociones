@@ -8,6 +8,7 @@ const estado = {
   ruedaBase: null, // la rueda original, como la manda /api/rueda
   rueda: null, // la del diario que estás viendo, con los nombres que su dueño les puso a sus emociones
   nombres: {}, // {emocion: nombre} de ese diario
+  misNombres: {}, // los de tu diario (para registrar una emoción aunque estés viendo uno compartido)
   registros: [],
   firma: '',
   periodo: leer('periodo', '7'), // 'hoy', '7', '30', 'todo' o 'dia'
@@ -105,6 +106,7 @@ function aplicarNombres() {
 
 function usarNombres(nombres) {
   estado.nombres = nombres;
+  if (!estado.diario) estado.misNombres = nombres;
   aplicarNombres();
   dibujarRueda();
   if (estado.filtro) estado.filtro.nombre = estado.rueda.emociones[estado.filtro.id].nombre;
@@ -1199,6 +1201,136 @@ function iniciarEditorRegistro() {
   $('#cancelar-registro').addEventListener('click', () => $('#dialogo-registro').close());
 }
 
+// --- Registrar una emoción desde el panel (el + de abajo, como en Daylio) ------------------------
+
+const MAX_EMOCIONES = 20; // por registro, como en el servidor
+let elegidas = []; // los ids de las emociones elegidas, en el orden en que las tocaste
+let cuandoAlAbrir = '';
+
+const horaISO = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+function avisarNuevo(texto) {
+  $('#aviso-nuevo').textContent = texto;
+  $('#aviso-nuevo').hidden = !texto;
+}
+
+function opcionDeEmocion(id, ...contenido) {
+  const boton = el('button', null, ...contenido);
+  boton.type = 'button';
+  boton.dataset.emocion = id;
+  boton.setAttribute('aria-pressed', 'false');
+  return boton;
+}
+
+// Una columna por categoría: su carita (la categoría en general) y debajo todas sus emociones,
+// con los nombres de tu rueda.
+function dibujarElegirEmociones() {
+  const nombre = (id) => estado.misNombres[id] || estado.ruedaBase.emociones[id].nombre;
+  $('#elegir-emociones').replaceChildren(...estado.ruedaBase.categorias.map((cat) => {
+    const columna = el('div', 'columna-emociones');
+    columna.style.setProperty('--color', cat.colores.centro);
+    const cara = opcionDeEmocion(cat.id, carita(cat.id), el('span', null, nombre(cat.id)));
+    cara.className = 'cara-categoria';
+    cara.setAttribute('aria-label', `${nombre(cat.id)} en general`);
+    const vistas = new Set(); // en la rueda, algunas emociones están en los dos anillos
+    const emociones = cat.ramas.flatMap(({ medio, exterior }) => [medio.id, exterior.id])
+      .filter((id) => !vistas.has(id) && vistas.add(id));
+    columna.append(cara, ...emociones.map((id) => {
+      const opcion = opcionDeEmocion(id, nombre(id));
+      opcion.className = 'opcion';
+      return opcion;
+    }));
+    return columna;
+  }));
+}
+
+function mostrarElegidas() {
+  for (const boton of $('#elegir-emociones').querySelectorAll('[data-emocion]')) {
+    boton.setAttribute('aria-pressed', String(elegidas.includes(boton.dataset.emocion)));
+  }
+  $('#guardar-nuevo').disabled = !elegidas.length;
+  $('#guardar-nuevo').textContent = elegidas.length > 1 ? `Guardar (${elegidas.length})` : 'Guardar';
+}
+
+function abrirNuevoRegistro() {
+  cerrarMenu();
+  const ahora = new Date();
+  $('#fecha-nuevo').value = fechaISO(ahora);
+  $('#fecha-nuevo').max = fechaISO(ahora);
+  $('#hora-nuevo').value = horaISO(ahora);
+  cuandoAlAbrir = `${$('#fecha-nuevo').value} ${$('#hora-nuevo').value}`;
+  $('#causa-nuevo').value = '';
+  elegidas = [];
+  dibujarElegirEmociones(); // se arma cada vez: los nombres de tu rueda pueden haber cambiado
+  mostrarElegidas();
+  avisarNuevo('');
+  $('#dialogo-nuevo').showModal();
+  $('#dialogo-nuevo').scrollTop = 0;
+  $('#titulo-nuevo').focus();
+}
+
+async function guardarNuevoRegistro() {
+  const cuando = `${$('#fecha-nuevo').value} ${$('#hora-nuevo').value}`;
+  // Si no tocaste la fecha ni la hora, es «ahora» (con segundos, para que quede en orden).
+  const fecha = cuando === cuandoAlAbrir ? new Date() : new Date(`${$('#fecha-nuevo').value}T${$('#hora-nuevo').value}`);
+  if (Number.isNaN(fecha.getTime())) {
+    avisarNuevo('Elige el día y la hora.');
+    return;
+  }
+  if (fecha.getTime() > Date.now() + 60_000) {
+    avisarNuevo('La fecha y la hora no pueden ser del futuro.');
+    return;
+  }
+  const respuesta = await fetch('/api/registros', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      emociones: elegidas, causa: $('#causa-nuevo').value, creado_en: Math.floor(fecha.getTime() / 1000),
+    }),
+  }).catch(() => null);
+  if (!respuesta?.ok) {
+    avisarNuevo('No pude guardarlo. Intenta de nuevo en un momento.');
+    return;
+  }
+  $('#dialogo-nuevo').close();
+  const compartido = Boolean(estado.diario);
+  location.hash = '#/diario';
+  if (compartido) return; // al volver a tu diario, se recarga solo
+  estado.firma = '';
+  await recargar();
+}
+
+function iniciarNuevoRegistro() {
+  $('#nuevo-registro').hidden = false;
+  $('#nuevo-lateral').hidden = false;
+  $('#nuevo-registro').addEventListener('click', abrirNuevoRegistro);
+  $('#nuevo-lateral').addEventListener('click', abrirNuevoRegistro);
+  $('#cerrar-nuevo').addEventListener('click', () => $('#dialogo-nuevo').close());
+  $('#elegir-emociones').addEventListener('click', (e) => {
+    const id = e.target.closest('[data-emocion]')?.dataset.emocion;
+    if (!id) return;
+    if (elegidas.includes(id)) {
+      elegidas = elegidas.filter((elegida) => elegida !== id);
+    } else if (elegidas.length >= MAX_EMOCIONES) {
+      avisarNuevo(`Puedes elegir hasta ${MAX_EMOCIONES} emociones por registro.`);
+      return;
+    } else {
+      elegidas.push(id);
+    }
+    avisarNuevo('');
+    mostrarElegidas();
+  });
+  $('#form-nuevo').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('#guardar-nuevo').disabled = true;
+    try {
+      await guardarNuevoRegistro();
+    } finally {
+      mostrarElegidas();
+    }
+  });
+}
+
 // --- Cambiarle el nombre a una palabra de tu rueda (tocándola) ------------------------------------
 
 let emocionRenombrada = null;
@@ -1278,7 +1410,7 @@ function dibujarLateral() {
   const { servidor } = estado;
   const conCuenta = Boolean(servidor.requiere_sesion && servidor.cuenta);
   for (const id of ['#grupo-compartidos', '#nav-palabras', '#nav-compartir', '#nav-telegram', '#caja-usuario',
-    '#tab-palabras', '#tab-compartir', '#tab-telegram']) {
+    '#tab-palabras', '#tab-compartir']) {
     $(id).hidden = !conCuenta;
   }
   if (!conCuenta) return;
@@ -1385,6 +1517,7 @@ async function iniciar() {
     iniciarPanelEmocion();
     iniciarEditorRegistro();
     iniciarEditorNombre();
+    iniciarNuevoRegistro();
   }
   estado.ruedaBase = await (await fetch('/api/rueda')).json();
   aplicarNombres();

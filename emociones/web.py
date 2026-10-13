@@ -138,14 +138,16 @@ class Panel(BaseHTTPRequestHandler):
         ruta = urlsplit(self.path).path
         if ruta == "/api/telegram":
             self._webhook()
-        elif ruta in ("/api/accesos", "/api/palabras", "/api/nombres", "/api/telegram/vincular",
+        elif ruta in ("/api/registros", "/api/accesos", "/api/palabras", "/api/nombres", "/api/telegram/vincular",
                       "/api/telegram/desvincular"):
             if not self._mismo_origen():
                 return
             atendible = self._con_cuenta()
             if atendible is None:
                 return
-            if ruta == "/api/accesos":
+            if ruta == "/api/registros":
+                self._crear_registro(*atendible)
+            elif ruta == "/api/accesos":
                 self._compartir(*atendible)
             elif ruta == "/api/palabras":
                 self._guardar_palabra(*atendible)
@@ -257,6 +259,19 @@ class Panel(BaseHTTPRequestHandler):
         """Un registro, solo si es de tu diario (los compartidos contigo son de solo lectura)."""
         registro = bd.obtener_registro(int(texto_id)) if texto_id.isdigit() else None
         return registro if registro is not None and registro["usuario_id"] == usuario["id"] else None
+
+    def _crear_registro(self, bd: BaseDeDatos, usuario: dict) -> None:
+        """Un registro cargado desde el panel (con el +): {"emociones": [<id>…], "causa": "…", "creado_en": <unix>}."""
+        datos = self._leer_json()
+        if datos is None:
+            return
+        nuevo = _nuevo_registro(datos, bd.nombres(usuario["id"]), int(time.time()))
+        if nuevo is None:
+            self._error(400)
+            return
+        creado_en, causa, emociones = nuevo
+        registro_id, _ = bd.crear_registro(usuario["id"], creado_en, causa, None, None, emociones)
+        self._json({"registro": bd.obtener_registro(registro_id)})
 
     def _editar_registro(self, bd: BaseDeDatos, usuario: dict, registro: dict) -> None:
         datos = self._leer_json()
@@ -593,6 +608,22 @@ class Panel(BaseHTTPRequestHandler):
 
     def log_message(self, formato: str, *args) -> None:
         log.debug(formato, *args)
+
+
+def _nuevo_registro(datos: dict, nombres: dict[str, str], ahora: int) -> tuple | None:
+    """Valida un registro nuevo del panel. Devuelve (creado_en, causa, [(palabra, emoción)]) o None si
+    no es válido. La fecha puede ser de antes (para anotar algo que ya pasó), pero no del futuro."""
+    creado_en, causa, pedidas = datos.get("creado_en", ahora), datos.get("causa"), datos.get("emociones")
+    if type(creado_en) is not int or not 0 < creado_en <= ahora + 300:  # 5 minutos de margen entre relojes
+        return None
+    if causa is not None and (not isinstance(causa, str) or len(causa) > MAX_CAUSA):
+        return None
+    if not isinstance(pedidas, list) or not 0 < len(pedidas) <= MAX_EMOCIONES or len(set(map(str, pedidas))) < len(pedidas):
+        return None
+    if not all(isinstance(emocion, str) and emocion in rueda.EMOCIONES for emocion in pedidas):
+        return None
+    emociones = [(rueda.nombre(emocion, nombres), emocion) for emocion in pedidas]
+    return creado_en, (causa.strip() or None) if causa else None, emociones
 
 
 def _edicion(registro: dict, datos: dict, nombres: dict[str, str]) -> tuple | None:

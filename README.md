@@ -1,7 +1,8 @@
 # Mis emociones
 
-Un diario de emociones: le escribes a un bot de Telegram cómo te sientes y qué lo causó, y la
-aplicación acomoda cada emoción en su lugar de **la rueda de los sentimientos** (Gloria Willcox,
+Un diario de emociones: le escribes a un bot de Telegram cómo te sientes y qué lo causó (o lo
+eliges en la app, con el **+** de abajo), y la aplicación acomoda cada emoción en su lugar de
+**la rueda de los sentimientos** (Gloria Willcox,
 1982; versión en español de @anabelcornago / Dr. Megan Anna Neff). Un panel web muestra la rueda
 con tus emociones resaltadas y tus registros ordenados por categoría.
 

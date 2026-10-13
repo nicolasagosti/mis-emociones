@@ -522,3 +522,77 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
   box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
 }
 .globo .ruta { opacity: 0.75; font-size: 0.78rem; }
+
+/* --- Registrar una emoción: el + de abajo y la hoja con las caritas (como en Daylio) ---------- */
+.nuevo-lateral { justify-content: center; margin: -8px 4px 0; padding: 10px 18px; }
+.nuevo-lateral svg, .circulo-nuevo svg {
+  width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round;
+}
+@media (max-width: 1023px) {
+  .nuevo-lateral { display: none; }
+  .barra-inferior .nuevo { justify-content: center; }
+  .barra-inferior .circulo-nuevo {
+    display: grid; place-items: center; width: 52px; height: 52px; margin-top: -18px; border-radius: 50%;
+    background: var(--boton); color: var(--boton-texto); box-shadow: 0 4px 14px rgb(35 132 93 / 35%);
+    transition: transform 0.15s;
+  }
+  .barra-inferior .nuevo:active .circulo-nuevo { transform: scale(0.94); }
+  .barra-inferior .circulo-nuevo svg { width: 26px; height: 26px; }
+}
+
+.hoja { width: min(720px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; overflow-y: auto; }
+.hoja .form-palabra { padding: 18px 18px 0; }
+.cabecera-hoja { display: grid; grid-template-columns: 28px 1fr 28px; align-items: center; gap: 8px; }
+.cabecera-hoja h2 { grid-column: 2; text-align: center; font-size: 1.3rem; }
+.cabecera-hoja .cerrar { grid-row: 1; grid-column: 1; }
+.cuando { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+.form-palabra .cuando input { padding: 6px 10px; border-color: transparent; background: var(--acento-suave); color: var(--acento-texto); font-weight: 700; }
+.centrada { text-align: center; }
+.opcional { color: var(--texto-suave); font-weight: 500; }
+
+.elegir-emociones { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px 5px; margin: 4px 0 8px; }
+.columna-emociones { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.elegir-emociones button {
+  border: 0; font: inherit; color: var(--texto); cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.elegir-emociones button:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.cara-categoria {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 0 4px; background: none;
+  font-size: 0.74rem; font-weight: 700;
+}
+.cara-categoria .carita {
+  width: min(48px, 100%); height: auto; aspect-ratio: 1; border-radius: 50%; transition: transform 0.15s;
+}
+.cara-categoria span { max-width: 100%; text-align: center; letter-spacing: -0.01em; hyphens: auto; overflow-wrap: anywhere; }
+.cara-categoria[aria-pressed="true"] .carita { transform: scale(1.08); box-shadow: 0 0 0 3px var(--tarjeta), 0 0 0 5px var(--color); }
+.opcion {
+  min-height: 34px; padding: 6px 2px; border-radius: 10px; background: var(--pista);
+  font-size: 0.72rem; font-weight: 600; line-height: 1.15; text-align: center; letter-spacing: -0.01em;
+  hyphens: auto; overflow-wrap: anywhere; transition: background 0.15s;
+}
+.opcion[aria-pressed="true"] { background: var(--color); color: #1d1a17; font-weight: 800; }
+@media (min-width: 560px) {
+  .elegir-emociones { gap: 14px 8px; }
+  .opcion { font-size: 0.82rem; padding: 7px 4px; }
+}
+.pie-hoja {
+  position: sticky; bottom: 0; display: flex; justify-content: center; margin: 4px -18px 0;
+  padding: 12px 18px calc(14px + env(safe-area-inset-bottom)); background: var(--tarjeta); border-top: 1px solid var(--borde);
+}
+.form-palabra .pie-hoja .boton { justify-self: auto; margin: 0; min-width: 60%; justify-content: center; padding: 12px 24px; font-size: 1rem; }
+.pie-hoja .boton:disabled { opacity: 0.45; cursor: default; }
+
+/* En el celular, la hoja sube desde abajo y ocupa todo el ancho. */
+@media (max-width: 699px) {
+  .hoja {
+    width: 100%; max-width: 100%; max-height: 94dvh; margin: auto 0 0; border: 0;
+    border-radius: 24px 24px 0 0; animation: subir-hoja 0.25s ease-out;
+  }
+  .hoja .form-palabra { padding: 16px 8px 0; }
+  .pie-hoja { margin-inline: -8px; }
+  .elegir-emociones { gap: 10px 4px; }
+  .cara-categoria { font-size: 0.7rem; }
+  .opcion { font-size: 0.7rem; }
+}
+@keyframes subir-hoja { from { transform: translateY(40%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .hoja { animation: none; } }
