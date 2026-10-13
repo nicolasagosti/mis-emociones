@@ -1395,4 +1395,7 @@ async function iniciar() {
   mostrarRuta();
 }
 
+// Para instalarla como aplicación (y para la app de Android).
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+
 iniciar();

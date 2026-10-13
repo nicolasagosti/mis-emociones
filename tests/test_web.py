@@ -62,6 +62,15 @@ class TestPanelLocal(ServidorDePrueba):
         for archivo in ("app.js", "estilos.css"):
             self.assertEqual(self.pedir(f"/estatico/{archivo}")[0], 200)
 
+    def test_aplicacion_instalable(self):
+        estado, cabeceras, cuerpo = self.pedir("/manifest.webmanifest")
+        self.assertEqual((estado, cabeceras["Content-Type"]), (200, "application/manifest+json"))
+        for icono in json.loads(cuerpo)["icons"]:
+            estado, cabeceras, _ = self.pedir(icono["src"])
+            self.assertEqual((estado, cabeceras["Content-Type"]), (200, "image/png"), icono["src"])
+        estado, cabeceras, _ = self.pedir("/sw.js")
+        self.assertEqual((estado, cabeceras["Content-Type"]), (200, "text/javascript; charset=utf-8"))
+
     def test_estado_y_rueda(self):
         _, _, cuerpo = self.pedir("/api/estado")
         estado = json.loads(cuerpo)

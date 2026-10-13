@@ -56,6 +56,8 @@ TIPOS = {
     ".css": "text/css; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
     ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".webmanifest": "application/manifest+json",
 }
 SEGURIDAD = {
     "X-Content-Type-Options": "nosniff",
@@ -125,6 +127,8 @@ class Panel(BaseHTTPRequestHandler):
             self._redirigir("/", self._cookie("sesion", "", 0))
         elif url.path == "/":
             self._archivo("index.html")
+        elif url.path in ("/manifest.webmanifest", "/sw.js"):  # en la raíz, para abarcar toda la app
+            self._archivo(url.path.removeprefix("/"))
         elif url.path.startswith("/estatico/"):
             self._archivo(url.path.removeprefix("/"))
         else:
