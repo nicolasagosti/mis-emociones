@@ -423,6 +423,38 @@ class TestDiarios(ServidorDePrueba):
             self.assertEqual(self.cargar(invalido)[0], 400, invalido)
         self.assertEqual(self.bd.listar_registros(yo["id"]), [])
 
+    def test_borrar_mi_cuenta(self):
+        yo = self.estado("yo@gmail.com")["cuenta"]
+        otra = self.estado("otra@gmail.com")["cuenta"]
+        self.cargar({"emociones": ["calma"], "causa": "mío"})
+        self.cargar({"emociones": ["tristeza"], "causa": "de otra"}, correo="otra@gmail.com")
+        self.bd.aprender(yo["id"], "agotado", "tristeza")
+        self.renombrar("enojo/frustrado", "Bloqueado")
+        self.bd.compartir(yo["id"], "psicologa@gmail.com", 1)
+        self.bd.compartir(otra["id"], "yo@gmail.com", 1)  # otra persona me compartió su diario
+        self.bd.compartir(otra["id"], "amiga@gmail.com", 1)
+
+        ajeno = {**self.sesion_de("yo@gmail.com"), "Origin": "https://sitio-ajeno.com"}
+        self.assertEqual(self.pedir("/api/cuenta", "DELETE", ajeno)[0], 403)
+        self.assertEqual(self.pedir("/api/cuenta", "DELETE")[0], 401)
+        self.assertIsNotNone(self.bd.usuario(yo["id"]))
+
+        estado, cabeceras, _ = self.pedir("/api/cuenta", "DELETE", self.sesion_de("yo@gmail.com"))
+        self.assertEqual(estado, 204)
+        self.assertIn("Max-Age=0", cabeceras["Set-Cookie"])  # cierra la sesión
+        self.assertIsNone(self.bd.usuario(yo["id"]))
+        self.assertEqual(self.bd.listar_registros(yo["id"]), [])
+        self.assertEqual((self.bd.vocabulario(yo["id"]), self.bd.nombres(yo["id"])), ({}, {}))
+        self.assertEqual(self.bd.compartidos_de(yo["id"]), [])
+        self.assertEqual(self.bd.compartidos_conmigo("yo@gmail.com"), [])
+        # Lo de la otra persona queda como estaba (salvo el acceso que me había dado).
+        self.assertEqual([r["causa"] for r in self.bd.listar_registros(otra["id"])], ["de otra"])
+        self.assertEqual([c["correo"] for c in self.bd.compartidos_de(otra["id"])], ["amiga@gmail.com"])
+        # Si vuelvo a entrar, empiezo de cero.
+        nueva = self.estado("yo@gmail.com")["cuenta"]
+        self.assertNotEqual(nueva["id"], yo["id"])
+        self.assertEqual(self.bd.listar_registros(nueva["id"]), [])
+
     def renombrar(self, emocion, nombre, correo="yo@gmail.com", **cabeceras):
         todas = {**self.sesion_de(correo), "Content-Type": "application/json", **cabeceras}
         cuerpo = json.dumps({"emocion": emocion, "nombre": nombre}).encode()

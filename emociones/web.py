@@ -179,6 +179,9 @@ class Panel(BaseHTTPRequestHandler):
         self._editar_registro(bd, usuario, registro)
 
     def _delete(self) -> None:
+        if urlsplit(self.path).path == "/api/cuenta":
+            self._borrar_cuenta()
+            return
         partes = urlsplit(self.path).path.strip("/").split("/")
         if len(partes) != 3 or partes[0] != "api" or partes[1] not in ("registros", "accesos", "palabras"):
             self._error(404)
@@ -203,6 +206,18 @@ class Panel(BaseHTTPRequestHandler):
             self._enviar(204, b"", "text/plain")
         else:
             self._error(404)
+
+    def _borrar_cuenta(self) -> None:
+        """Borra tu cuenta y todo lo tuyo, y cierra la sesión."""
+        if not self._mismo_origen():
+            return
+        atendible = self._con_cuenta()
+        if atendible is None:
+            return
+        bd, usuario = atendible
+        bd.borrar_usuario(usuario["id"])
+        log.info("La cuenta %s se borró", usuario["id"])
+        self._enviar(204, b"", "text/plain", (self._cookie("sesion", "", 0),))
 
     # --- Diarios -----------------------------------------------------------------------
 

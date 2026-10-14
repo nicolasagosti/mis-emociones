@@ -1331,6 +1331,36 @@ function iniciarNuevoRegistro() {
   });
 }
 
+// --- Borrar tu cuenta (lo pide Google Play) --------------------------------------------------------
+
+const confirmaBorrar = () => $('#confirmar-borrar-cuenta').value.trim().toUpperCase() === 'BORRAR';
+
+function iniciarBorrarCuenta() {
+  const aviso = (texto) => { $('#aviso-borrar-cuenta').textContent = texto; $('#aviso-borrar-cuenta').hidden = !texto; };
+  $('#abrir-borrar-cuenta').addEventListener('click', () => {
+    cerrarMenu();
+    $('#confirmar-borrar-cuenta').value = '';
+    $('#borrar-cuenta').disabled = true;
+    aviso('');
+    $('#dialogo-borrar-cuenta').showModal();
+    $('#titulo-borrar-cuenta').focus();
+  });
+  $('#confirmar-borrar-cuenta').addEventListener('input', () => { $('#borrar-cuenta').disabled = !confirmaBorrar(); });
+  $('#cancelar-borrar-cuenta').addEventListener('click', () => $('#dialogo-borrar-cuenta').close());
+  $('#form-borrar-cuenta').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!confirmaBorrar()) return;
+    $('#borrar-cuenta').disabled = true;
+    const respuesta = await fetch('/api/cuenta', { method: 'DELETE' }).catch(() => null);
+    if (!respuesta?.ok) {
+      aviso('No pude borrarla. Intenta de nuevo en un momento.');
+      $('#borrar-cuenta').disabled = false;
+      return;
+    }
+    location.replace('/'); // la sesión ya se cerró: vuelve a la pantalla de entrar
+  });
+}
+
 // --- Cambiarle el nombre a una palabra de tu rueda (tocándola) ------------------------------------
 
 let emocionRenombrada = null;
@@ -1420,6 +1450,7 @@ function dibujarLateral() {
   $('#nombre-usuario').textContent = nombre;
   $('#detalle-usuario').textContent = servidor.cuenta.correo ? 'Cuenta de Google' : 'Entraste con Telegram';
   $('#avatar').textContent = nombre[0].toUpperCase();
+  $('#abrir-borrar-cuenta').hidden = false;
   $('#nav-compartidos').replaceChildren(...(servidor.compartidos.length
     ? servidor.compartidos.map((diario) => {
       const enlace = el('a', null, diario.correo);
@@ -1518,6 +1549,7 @@ async function iniciar() {
     iniciarEditorRegistro();
     iniciarEditorNombre();
     iniciarNuevoRegistro();
+    iniciarBorrarCuenta();
   }
   estado.ruedaBase = await (await fetch('/api/rueda')).json();
   aplicarNombres();

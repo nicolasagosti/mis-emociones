@@ -596,3 +596,13 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 }
 @keyframes subir-hoja { from { transform: translateY(40%); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .hoja { animation: none; } }
+
+/* --- Borrar la cuenta ---------------------------------------------------------------------------- */
+.enlace-borrar {
+  align-self: center; margin-top: -12px; padding: 4px 10px; border: 0; border-radius: 8px; background: none;
+  color: var(--texto-suave); font: inherit; font-size: 0.78rem; cursor: pointer;
+}
+.enlace-borrar:hover { background: var(--pista); color: #d4382b; }
+.enlace-borrar:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.boton.peligro-lleno { background: #d4382b; color: #fff; }
+.boton.peligro-lleno:disabled { opacity: 0.45; cursor: default; }

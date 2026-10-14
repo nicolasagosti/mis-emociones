@@ -238,6 +238,19 @@ class BaseDeDatos:
                         "FROM nombres WHERE usuario_id = ? ON CONFLICT DO NOTHING", (hacia, desde))
             con.execute("DELETE FROM usuarios WHERE id = ?", (desde,))
 
+    def borrar_usuario(self, usuario_id: int) -> None:
+        """Borra la cuenta con todo lo suyo: registros, palabras, nombres, a quién le compartió su diario
+        y también los diarios que le compartieron a su correo (para que no queden datos de esa persona)."""
+        with self._conexion() as con:
+            fila = con.execute("SELECT correo FROM usuarios WHERE id = ?", (usuario_id,)).fetchone()
+            if fila is None:
+                return
+            if fila["correo"]:
+                con.execute("DELETE FROM compartidos WHERE correo = ?", (fila["correo"],))
+            for tabla in ("registros", "vocabulario", "nombres", "compartidos"):
+                con.execute(f"DELETE FROM {tabla} WHERE usuario_id = ?", (usuario_id,))
+            con.execute("DELETE FROM usuarios WHERE id = ?", (usuario_id,))
+
     # --- Registros ---------------------------------------------------------------------
 
     def crear_registro(self, usuario_id: int | None, creado_en: int, causa: str | None, mensaje: str | None,

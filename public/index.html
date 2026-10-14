@@ -87,6 +87,7 @@
         </div>
         <a class="salir" href="/salir" aria-label="Cerrar sesión" title="Cerrar sesión"><svg aria-hidden="true"><use href="#i-salir"/></svg></a>
       </div>
+      <button type="button" class="enlace-borrar" id="abrir-borrar-cuenta" hidden>Borrar mi cuenta</button>
     </aside>
     <div class="velo" id="velo" hidden></div>
 
@@ -343,6 +344,22 @@
       <p class="aviso-acceso" id="aviso-nuevo" role="status" hidden></p>
       <div class="pie-hoja">
         <button type="submit" class="boton" id="guardar-nuevo" disabled>Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialogo" id="dialogo-borrar-cuenta" aria-labelledby="titulo-borrar-cuenta">
+    <form class="form-palabra" id="form-borrar-cuenta" method="dialog">
+      <h2 id="titulo-borrar-cuenta" tabindex="-1" autofocus>Borrar mi cuenta</h2>
+      <p class="nota-dialogo">Se borran para siempre tus registros, las palabras que le enseñaste al bot, los nombres
+        de tu rueda y los accesos a tu diario. También dejas de ver los diarios que te compartieron, y tu Telegram
+        se desvincula. <strong>No se puede deshacer.</strong></p>
+      <label for="confirmar-borrar-cuenta">Para confirmar, escribe BORRAR</label>
+      <input id="confirmar-borrar-cuenta" required autocomplete="off" spellcheck="false" autocapitalize="characters">
+      <p class="aviso-acceso" id="aviso-borrar-cuenta" role="status" hidden></p>
+      <div class="botones">
+        <button type="submit" class="boton peligro-lleno" id="borrar-cuenta" disabled>Borrar mi cuenta</button>
+        <button type="button" class="boton secundario" id="cancelar-borrar-cuenta">Cancelar</button>
       </div>
     </form>
   </dialog>
