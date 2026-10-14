@@ -127,6 +127,8 @@ class Panel(BaseHTTPRequestHandler):
             self._redirigir("/", self._cookie("sesion", "", 0))
         elif url.path == "/":
             self._archivo("index.html")
+        elif url.path == "/privacidad":
+            self._archivo("privacidad.html")
         elif url.path in ("/manifest.webmanifest", "/sw.js"):  # en la raíz, para abarcar toda la app
             self._archivo(url.path.removeprefix("/"))
         elif url.path.startswith("/estatico/"):

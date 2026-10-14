@@ -6,7 +6,8 @@
     { "source": "/api/(.*)", "destination": "/api/index" },
     { "source": "/auth/(.*)", "destination": "/api/index" },
     { "source": "/entrar", "destination": "/api/index" },
-    { "source": "/salir", "destination": "/api/index" }
+    { "source": "/salir", "destination": "/api/index" },
+    { "source": "/privacidad", "destination": "/privacidad.html" }
   ],
   "headers": [
     {

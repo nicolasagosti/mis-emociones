@@ -62,6 +62,11 @@ class TestPanelLocal(ServidorDePrueba):
         for archivo in ("app.js", "estilos.css"):
             self.assertEqual(self.pedir(f"/estatico/{archivo}")[0], 200)
 
+    def test_politica_de_privacidad(self):
+        estado, cabeceras, cuerpo = self.pedir("/privacidad")
+        self.assertEqual((estado, cabeceras["Content-Type"]), (200, "text/html; charset=utf-8"))
+        self.assertIn(b'id="borrar-cuenta"', cuerpo)  # Google Play enlaza aquí para pedir el borrado
+
     def test_aplicacion_instalable(self):
         estado, cabeceras, cuerpo = self.pedir("/manifest.webmanifest")
         self.assertEqual((estado, cabeceras["Content-Type"]), (200, "application/manifest+json"))

@@ -598,11 +598,27 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 @media (prefers-reduced-motion: reduce) { .hoja { animation: none; } }
 
 /* --- Borrar la cuenta ---------------------------------------------------------------------------- */
-.enlace-borrar {
-  align-self: center; margin-top: -12px; padding: 4px 10px; border: 0; border-radius: 8px; background: none;
-  color: var(--texto-suave); font: inherit; font-size: 0.78rem; cursor: pointer;
+.pie-lateral { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; margin: -12px 0 0; }
+.pie-lateral a, .enlace-borrar {
+  padding: 4px 10px; border: 0; border-radius: 8px; background: none;
+  color: var(--texto-suave); font: inherit; font-size: 0.78rem; text-decoration: none; cursor: pointer;
 }
+.pie-lateral a:hover { background: var(--pista); color: var(--texto); }
 .enlace-borrar:hover { background: var(--pista); color: #d4382b; }
-.enlace-borrar:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.pie-lateral a:focus-visible, .enlace-borrar:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+.pie-acceso { text-align: center; font-size: 0.85rem; }
+.pie-acceso a { color: var(--texto-suave); }
+
+/* --- Política de privacidad ---------------------------------------------------------------------- */
+.documento { max-width: 720px; margin: 0 auto; padding: 28px 16px 48px; display: grid; gap: 14px; }
+.documento header { display: grid; gap: 6px; margin-bottom: 6px; }
+.documento .volver { color: var(--acento-texto); font-weight: 700; text-decoration: none; font-size: 0.92rem; }
+.documento .subtitulo { margin: 0; color: var(--texto-suave); }
+.documento h2 { margin-bottom: 8px; }
+.documento p, .documento li { line-height: 1.6; }
+.documento p { margin: 0 0 10px; }
+.documento p:last-child { margin-bottom: 0; }
+.documento ul, .documento ol { margin: 0 0 10px; padding-left: 1.3em; display: grid; gap: 6px; }
+.documento a { color: var(--acento-texto); overflow-wrap: anywhere; }
 .boton.peligro-lleno { background: #d4382b; color: #fff; }
 .boton.peligro-lleno:disabled { opacity: 0.45; cursor: default; }
