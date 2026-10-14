@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.nicolasagosti.misemociones",
+      "sha256_cert_fingerprints": [
+        "E9:D4:B2:50:0E:44:7F:FB:CA:5E:3F:4D:51:52:8A:9D:98:E9:75:4B:78:65:AD:71:00:6F:2E:0B:71:21:4F:87"
+      ]
+    }
+  }
+]
