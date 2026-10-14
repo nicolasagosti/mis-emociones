@@ -747,7 +747,6 @@ function mostrarAcceso(servidor) {
   $('#acceso').hidden = false;
   $('#entrar-google').hidden = !servidor.google;
   $('#acceso-telegram').hidden = servidor.google;
-  $('#acceso-telegram-alternativa').hidden = !servidor.google;
   const pasos = [
     ['Base de datos', servidor.base_de_datos,
       'En Vercel: Storage → Create Database → Neon. Conéctala a este proyecto y vuelve a desplegar.'],
@@ -757,7 +756,11 @@ function mostrarAcceso(servidor) {
       'Crea el bot con @BotFather y guarda el token como TELEGRAM_TOKEN en Settings → Environment Variables. Luego vuelve a desplegar.'],
     ['Bot conectado', ['conectado', 'local'].includes(servidor.bot), AYUDA_BOT[servidor.bot] || ''],
   ];
-  $('#pasos').replaceChildren(...pasos.map(([titulo, listo, ayuda]) => el('li', listo ? 'listo' : 'falta',
+  // Con Google listo, la pantalla solo muestra el botón: la lista aparece si algo falla (y sin el bot,
+  // que ya no hace falta para entrar).
+  const visibles = servidor.google ? pasos.slice(0, 2).filter(([, listo]) => !listo) : pasos;
+  $('#pasos').hidden = !visibles.length;
+  $('#pasos').replaceChildren(...visibles.map(([titulo, listo, ayuda]) => el('li', listo ? 'listo' : 'falta',
     el('span', 'marca', listo ? '✓' : '✗'),
     el('div', null, el('strong', null, titulo), listo ? null : el('span', null, ayuda)))));
 }

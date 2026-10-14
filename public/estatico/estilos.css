@@ -459,7 +459,7 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .acceso a { color: var(--texto); }
 .acceso .boton-google {
   display: flex; align-items: center; justify-content: center; gap: 12px;
-  padding: 12px 18px; margin: 16px 0 18px; border-radius: 999px;
+  padding: 12px 18px; margin: 16px 0 0; border-radius: 999px;
   border: 1px solid #747775; background: #fff; color: #1f1f1f;
   font-weight: 600; font-size: 1rem; text-decoration: none;
 }
