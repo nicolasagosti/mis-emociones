@@ -350,6 +350,20 @@
     </form>
   </dialog>
 
+  <dialog class="dialogo hoja" id="dialogo-dia" aria-labelledby="titulo-dia">
+    <div class="form-palabra">
+      <header class="cabecera-hoja">
+        <button type="button" class="cerrar" id="cerrar-dia" aria-label="Cerrar">✕</button>
+        <h2 id="titulo-dia" tabindex="-1" autofocus></h2>
+      </header>
+      <p class="nota-dialogo centrada" id="resumen-dia"></p>
+      <div class="dia" id="registros-dia"></div>
+      <div class="pie-hoja" id="pie-dia" hidden>
+        <button type="button" class="boton" id="registrar-dia">Registrar este día</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog class="dialogo" id="dialogo-borrar-cuenta" aria-labelledby="titulo-borrar-cuenta">
     <form class="form-palabra" id="form-borrar-cuenta" method="dialog">
       <h2 id="titulo-borrar-cuenta" tabindex="-1" autofocus>Borrar mi cuenta</h2>

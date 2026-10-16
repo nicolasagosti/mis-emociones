@@ -622,3 +622,9 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .documento a { color: var(--acento-texto); overflow-wrap: anywhere; }
 .boton.peligro-lleno { background: #d4382b; color: #fff; }
 .boton.peligro-lleno:disabled { opacity: 0.45; cursor: default; }
+
+/* --- El detalle de un día (al tocar su carita en el calendario) ------------------------------------ */
+.hoja .dia .lista { background: var(--fondo); box-shadow: none; }
+#registros-dia:empty { display: none; }
+#dialogo-dia .form-palabra { padding-bottom: 18px; }
+#dialogo-dia .pie-hoja { margin-bottom: -18px; }

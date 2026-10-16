@@ -485,6 +485,49 @@ function caritaDelDia(registros) {
 
 const primeroDelMes = (mes) => diaComoFecha(`${mes}-01`);
 
+// «Calma ×2, Miedo»: las categorías del día, de la que más sentiste a la que menos.
+const resumenDelDia = (registros, conteo) => (registros.length
+  ? [...conteo].sort((a, b) => b[1] - a[1])
+    .map(([id, veces]) => `${categoria(id).nombre}${veces > 1 ? ` ×${veces}` : ''}`).join(', ') || 'sin clasificar'
+  : '');
+
+// --- El detalle de un día: tocar su carita en el calendario abre lo que registraste ---------------
+
+let diaAbierto = '';
+
+const registrosDelDia = (iso) => estado.calendario
+  .filter((r) => fechaISO(new Date(r.creado_en * 1000)) === iso)
+  .sort((a, b) => b.creado_en - a.creado_en);
+
+function dibujarDia() {
+  const registros = registrosDelDia(diaAbierto);
+  $('#titulo-dia').textContent = formatoDia.format(diaComoFecha(diaAbierto));
+  const cantidad = `${registros.length} ${registros.length === 1 ? 'registro' : 'registros'}`;
+  $('#resumen-dia').textContent = registros.length
+    ? `${cantidad} · ${resumenDelDia(registros, caritaDelDia(registros).conteo)}`
+    : `${estado.rol === 'dueno' ? 'No registraste' : 'No registró'} emociones este día.`;
+  $('#registros-dia').replaceChildren(...(registros.length
+    ? [el('div', 'lista', ...registros.map((r) => tarjeta(r, { enDiario: true })))]
+    : []));
+  $('#pie-dia').hidden = registros.length > 0 || !puedeEditar();
+}
+
+function abrirDia(iso) {
+  diaAbierto = iso;
+  dibujarDia();
+  $('#dialogo-dia').showModal();
+  $('#dialogo-dia').scrollTop = 0;
+  $('#titulo-dia').focus();
+}
+
+function iniciarDia() {
+  $('#cerrar-dia').addEventListener('click', () => $('#dialogo-dia').close());
+  $('#registrar-dia').addEventListener('click', () => {
+    $('#dialogo-dia').close();
+    abrirNuevoRegistro(diaAbierto);
+  });
+}
+
 function dibujarCalendario() {
   const inicio = primeroDelMes(estado.mes);
   const anio = inicio.getFullYear();
@@ -518,17 +561,14 @@ function dibujarCalendario() {
     boton.classList.toggle('hoy', iso === hoy);
     boton.classList.toggle('elegido', iso === elegido);
     if (iso === elegido) boton.setAttribute('aria-current', 'date');
-    const detalle = registros.length
-      ? [...conteo].sort((a, b) => b[1] - a[1])
-        .map(([id, veces]) => `${categoria(id).nombre}${veces > 1 ? ` ×${veces}` : ''}`).join(', ') || 'sin clasificar'
-      : 'sin registros';
-    boton.title = `${formatoDia.format(fecha)}: ${detalle}`;
+    boton.title = `${formatoDia.format(fecha)}: ${resumenDelDia(registros, conteo) || 'sin registros'}`;
     boton.setAttribute('aria-label', boton.title);
     if (iso > hoy) boton.disabled = true; // no hay registros en el futuro
-    else boton.addEventListener('click', () => elegirDia(iso));
+    else boton.addEventListener('click', () => abrirDia(iso));
     celdas.push(boton);
   }
   $('#calendario').replaceChildren(...celdas);
+  if ($('#dialogo-dia').open) dibujarDia(); // editaste o borraste un registro desde la hoja del día
 
   // Como el «Mood Count» de Daylio: cuántas veces sentiste cada categoría en el mes.
   const { porCategoria } = contar(estado.calendario);
@@ -1255,13 +1295,14 @@ function mostrarElegidas() {
   $('#guardar-nuevo').textContent = elegidas.length > 1 ? `Guardar (${elegidas.length})` : 'Guardar';
 }
 
-function abrirNuevoRegistro() {
+function abrirNuevoRegistro(dia = null) {
   cerrarMenu();
   const ahora = new Date();
   $('#fecha-nuevo').value = fechaISO(ahora);
   $('#fecha-nuevo').max = fechaISO(ahora);
   $('#hora-nuevo').value = horaISO(ahora);
   cuandoAlAbrir = `${$('#fecha-nuevo').value} ${$('#hora-nuevo').value}`;
+  if (typeof dia === 'string') $('#fecha-nuevo').value = dia; // desde el calendario: ese día, a esta hora
   $('#causa-nuevo').value = '';
   elegidas = [];
   dibujarElegirEmociones(); // se arma cada vez: los nombres de tu rueda pueden haber cambiado
@@ -1306,8 +1347,8 @@ async function guardarNuevoRegistro() {
 function iniciarNuevoRegistro() {
   $('#nuevo-registro').hidden = false;
   $('#nuevo-lateral').hidden = false;
-  $('#nuevo-registro').addEventListener('click', abrirNuevoRegistro);
-  $('#nuevo-lateral').addEventListener('click', abrirNuevoRegistro);
+  $('#nuevo-registro').addEventListener('click', () => abrirNuevoRegistro());
+  $('#nuevo-lateral').addEventListener('click', () => abrirNuevoRegistro());
   $('#cerrar-nuevo').addEventListener('click', () => $('#dialogo-nuevo').close());
   $('#elegir-emociones').addEventListener('click', (e) => {
     const id = e.target.closest('[data-emocion]')?.dataset.emocion;
@@ -1560,6 +1601,7 @@ async function iniciar() {
   conectarRueda();
   conectarControles();
   conectarMenu();
+  iniciarDia();
   mostrarRuta();
 }
 
