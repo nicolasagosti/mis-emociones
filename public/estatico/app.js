@@ -491,30 +491,65 @@ const resumenDelDia = (registros, conteo) => (registros.length
     .map(([id, veces]) => `${categoria(id).nombre}${veces > 1 ? ` ×${veces}` : ''}`).join(', ') || 'sin clasificar'
   : '');
 
-// --- El detalle de un día: tocar su carita en el calendario abre lo que registraste ---------------
+// --- El detalle del calendario: tocar la carita de un día, o la de una categoría en el conteo
+// del mes, abre sus registros en una hoja --------------------------------------------------------
 
-let diaAbierto = '';
+let detalle = null; // { dia: '2026-10-14' } o { categoria: 'enojo' }, del mes que estás viendo
 
-const registrosDelDia = (iso) => estado.calendario
-  .filter((r) => fechaISO(new Date(r.creado_en * 1000)) === iso)
-  .sort((a, b) => b.creado_en - a.creado_en);
+const masNuevoPrimero = (a, b) => b.creado_en - a.creado_en;
+const cantidadDe = (n, una, varias) => `${n} ${n === 1 ? una : varias}`;
 
-function dibujarDia() {
-  const registros = registrosDelDia(diaAbierto);
-  $('#titulo-dia').textContent = formatoDia.format(diaComoFecha(diaAbierto));
-  const cantidad = `${registros.length} ${registros.length === 1 ? 'registro' : 'registros'}`;
-  $('#resumen-dia').textContent = registros.length
-    ? `${cantidad} · ${resumenDelDia(registros, caritaDelDia(registros).conteo)}`
-    : `${estado.rol === 'dueno' ? 'No registraste' : 'No registró'} emociones este día.`;
-  $('#registros-dia').replaceChildren(...(registros.length
-    ? [el('div', 'lista', ...registros.map((r) => tarjeta(r, { enDiario: true })))]
-    : []));
-  $('#pie-dia').hidden = registros.length > 0 || !puedeEditar();
+// Los registros agrupados por día, como en el diario.
+function porDias(registros) {
+  const dias = new Map();
+  for (const registro of registros) {
+    const clave = formatoDia.format(new Date(registro.creado_en * 1000));
+    if (!dias.has(clave)) dias.set(clave, []);
+    dias.get(clave).push(registro);
+  }
+  return [...dias].map(([dia, lista]) => el('section', null,
+    el('h3', null, dia), el('div', 'lista', ...lista.map((r) => tarjeta(r, { enDiario: true })))));
 }
 
-function abrirDia(iso) {
-  diaAbierto = iso;
-  dibujarDia();
+function dibujarDetalle() {
+  let titulo;
+  let resumen;
+  let contenido = [];
+  let registros;
+  if (detalle.dia) {
+    registros = estado.calendario
+      .filter((r) => fechaISO(new Date(r.creado_en * 1000)) === detalle.dia).sort(masNuevoPrimero);
+    titulo = formatoDia.format(diaComoFecha(detalle.dia));
+    resumen = registros.length
+      ? `${cantidadDe(registros.length, 'registro', 'registros')} · ${resumenDelDia(registros, caritaDelDia(registros).conteo)}`
+      : `${estado.rol === 'dueno' ? 'No registraste' : 'No registró'} emociones este día.`;
+    if (registros.length) contenido = [el('div', 'lista', ...registros.map((r) => tarjeta(r, { enDiario: true })))];
+  } else {
+    const cat = categoria(detalle.categoria);
+    registros = estado.calendario
+      .filter((r) => r.emociones.some((fila) => info(fila)?.categoria === cat.id)).sort(masNuevoPrimero);
+    const veces = new Map(); // Frustrado ×2, Molesto…
+    for (const fila of registros.flatMap((r) => r.emociones)) {
+      const datos = info(fila);
+      if (datos?.categoria === cat.id) veces.set(datos.nombre, (veces.get(datos.nombre) || 0) + 1);
+    }
+    const total = [...veces.values()].reduce((suma, n) => suma + n, 0);
+    titulo = `${cat.nombre} en ${formatoMes.format(primeroDelMes(estado.mes))}`;
+    resumen = registros.length
+      ? `${cantidadDe(total, 'vez', 'veces')} en ${cantidadDe(registros.length, 'registro', 'registros')} · `
+        + [...veces].sort((a, b) => b[1] - a[1]).map(([nombre, n]) => (n > 1 ? `${nombre} ×${n}` : nombre)).join(', ')
+      : 'Ningún registro este mes.';
+    contenido = porDias(registros);
+  }
+  $('#titulo-dia').textContent = titulo;
+  $('#resumen-dia').textContent = resumen;
+  $('#registros-dia').replaceChildren(...contenido);
+  $('#pie-dia').hidden = Boolean(detalle.categoria) || registros.length > 0 || !puedeEditar();
+}
+
+function abrirDetalle(que) {
+  detalle = que;
+  dibujarDetalle();
   $('#dialogo-dia').showModal();
   $('#dialogo-dia').scrollTop = 0;
   $('#titulo-dia').focus();
@@ -524,7 +559,7 @@ function iniciarDia() {
   $('#cerrar-dia').addEventListener('click', () => $('#dialogo-dia').close());
   $('#registrar-dia').addEventListener('click', () => {
     $('#dialogo-dia').close();
-    abrirNuevoRegistro(diaAbierto);
+    abrirNuevoRegistro(detalle.dia);
   });
 }
 
@@ -564,19 +599,23 @@ function dibujarCalendario() {
     boton.title = `${formatoDia.format(fecha)}: ${resumenDelDia(registros, conteo) || 'sin registros'}`;
     boton.setAttribute('aria-label', boton.title);
     if (iso > hoy) boton.disabled = true; // no hay registros en el futuro
-    else boton.addEventListener('click', () => abrirDia(iso));
+    else boton.addEventListener('click', () => abrirDetalle({ dia: iso }));
     celdas.push(boton);
   }
   $('#calendario').replaceChildren(...celdas);
-  if ($('#dialogo-dia').open) dibujarDia(); // editaste o borraste un registro desde la hoja del día
+  if ($('#dialogo-dia').open) dibujarDetalle(); // editaste o borraste un registro desde la hoja
 
   // Como el «Mood Count» de Daylio: cuántas veces sentiste cada categoría en el mes.
   const { porCategoria } = contar(estado.calendario);
   $('#conteo-mes').replaceChildren(...estado.rueda.categorias.map((cat) => {
     const veces = porCategoria.get(cat.id) || 0;
-    const fila = el('li', veces ? null : 'cero', carita(cat.id), el('span', null, String(veces)));
-    fila.title = `${cat.nombre}: ${veces} ${veces === 1 ? 'vez' : 'veces'} en ${nombreMes}`;
-    return fila;
+    const boton = el('button', null, carita(cat.id), el('span', null, String(veces)));
+    boton.type = 'button';
+    boton.title = `${cat.nombre}: ${cantidadDe(veces, 'vez', 'veces')} en ${nombreMes}`;
+    boton.setAttribute('aria-label', boton.title);
+    if (veces) boton.addEventListener('click', () => abrirDetalle({ categoria: cat.id }));
+    else boton.disabled = true;
+    return el('li', veces ? null : 'cero', boton);
   }));
 }
 

@@ -511,8 +511,16 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 .celda:focus-visible .circulo, .celda:focus-visible .carita { box-shadow: 0 0 0 2px var(--tarjeta), 0 0 0 4px var(--acento); }
 .panel-calendario h3 { margin-top: 20px; }
 .conteo-mes { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-.conteo-mes li { display: flex; flex-direction: column; align-items: center; gap: 4px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.conteo-mes .carita { width: min(42px, 100%); height: auto; aspect-ratio: 1; }
+.conteo-mes li { min-width: 0; }
+.conteo-mes button {
+  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0; border: 0;
+  background: none; color: var(--texto); font: inherit; font-weight: 800; font-variant-numeric: tabular-nums;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.conteo-mes button:disabled { cursor: default; }
+.conteo-mes button:hover:not(:disabled) .carita { transform: scale(1.07); }
+.conteo-mes button:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; border-radius: 12px; }
+.conteo-mes .carita { width: min(42px, 100%); height: auto; aspect-ratio: 1; transition: transform 0.15s; }
 .conteo-mes li.cero .carita { filter: grayscale(1); opacity: 0.35; }
 .conteo-mes li.cero span { color: var(--texto-suave); font-weight: 600; }
 
@@ -626,5 +634,7 @@ code { background: var(--pista); padding: 2px 8px; border-radius: 6px; font-size
 /* --- El detalle de un día (al tocar su carita en el calendario) ------------------------------------ */
 .hoja .dia .lista { background: var(--fondo); box-shadow: none; }
 #registros-dia:empty { display: none; }
+#registros-dia { display: grid; gap: 16px; }
+#registros-dia h3 { margin: 0 0 8px; }
 #dialogo-dia .form-palabra { padding-bottom: 18px; }
 #dialogo-dia .pie-hoja { margin-bottom: -18px; }
